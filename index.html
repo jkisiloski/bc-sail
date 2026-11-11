@@ -71,10 +71,11 @@
   #sumSea{color:#d7e4ec!important}
   .corr{display:inline-block;vertical-align:middle;font:700 10px system-ui;color:#c5e1a5;border:1px solid #6f8f55;border-radius:6px;padding:1px 5px;margin-left:2px}
   #sumSea .sv{font-weight:700}
+  #sumSea[hidden]{display:none}
   .row3{position:absolute;z-index:1000;top:calc(env(safe-area-inset-top) + 118px);left:10px;right:10px;display:flex;gap:8px;align-items:stretch;pointer-events:none}
   .row3>*{pointer-events:auto}
-  #waterSeg{flex:none}
-  #waterSeg[hidden]{display:none}
+  .subseg{flex:none}
+  .subseg[hidden]{display:none}
   .mchip{min-width:0;max-width:100%;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px 12px;color:var(--txt);font:600 12px system-ui;text-align:left}
   .mchip[hidden]{display:none}
   .mchip b{font-size:13px;white-space:nowrap}
@@ -89,7 +90,7 @@
   .mloc small{color:var(--mut)}
   .mloc p{margin:8px 0 0;font-size:13px;line-height:1.45}
   .mk{display:inline-block;min-width:62px;color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
-  #waterSeg button{padding:8px 16px;font-size:13px}
+  .subseg button{padding:8px 14px;font-size:13px}
   #sumTide .tst{color:var(--mut)}
   .tw{color:#4fc3f7;font-size:10px}
   .tide{display:flex;align-items:center;gap:2px;font:700 11px system-ui;color:#d9f1ff;background:rgba(15,40,58,.85);border:1px solid #2b6c8f;border-radius:7px;padding:1px 5px;white-space:nowrap;width:max-content}
@@ -132,6 +133,13 @@
   .leaflet-bottom{bottom:calc(env(safe-area-inset-bottom) + 192px)}
   .tapmark{width:14px;height:14px;border:3px solid #fff;border-radius:50%;background:#7cb342;box-shadow:0 0 0 2px #000}
   .flowcv{position:absolute;left:0;top:0;pointer-events:none}
+  .surfpin{display:flex;flex-direction:column;align-items:center;background:rgba(18,24,30,.92);border:2px solid #5b6670;border-radius:10px;padding:2px 6px;width:max-content;margin:0 auto;font:600 10px system-ui;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.5)}
+  .surfpin b{font-size:13px}
+  .surfpin span{font-size:10px;letter-spacing:-1px}
+  .surfpin small{color:#9fb3c1;font-size:9px;white-space:nowrap}
+  .surfpin.sm{flex-direction:row;gap:4px;padding:1px 6px;border-radius:8px;text-shadow:0 0 2px rgba(0,0,0,.6)}
+  .surfpin.sm b{font-size:11px}
+  .surfpin.sm span{font-size:10px;letter-spacing:0}
   #install{position:absolute;z-index:1500;left:10px;right:70px;bottom:calc(env(safe-area-inset-bottom) + 215px);display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px;box-shadow:0 6px 24px rgba(0,0,0,.5)}
   #install[hidden]{display:none}
   #install img{width:40px;height:40px;border-radius:10px;flex:none}
@@ -149,10 +157,10 @@
 
 <div class="top">
   <div class="seg" id="layerSeg">
-    <button data-l="wind" class="on">Wind</button>
-    <button data-l="gust">Gusts</button>
+    <button data-l="windtop" class="on">Wind</button>
     <button data-l="current">Current</button>
     <button data-l="water">Water</button>
+    <button data-l="surf">Surf</button>
   </div>
   <div class="sq" id="btnMenu" title="Layers">≡<div class="dots"><span class="dot" id="sMap"></span><span class="dot" id="sObs"></span><span class="dot" id="sCur"></span></div></div>
 </div>
@@ -160,7 +168,7 @@
   <div class="pill" id="modelPill"><span class="ldot"></span><span id="modelName">HRDPS 2.5 km</span></div>
   <div id="scale"><div class="bar" id="scaleBar"></div><div class="lbl" id="scaleLbl"></div></div>
 </div>
-<div class="row3"><div class="seg" id="waterSeg" hidden><button data-w="waves" class="on">Waves</button><button data-w="temp">Temp</button></div><button id="marineChip" class="mchip" hidden></button></div>
+<div class="row3"><div class="seg subseg" id="windSeg" hidden><button data-w="wind" class="on">Sustained</button><button data-w="gust">Gusts</button></div><div class="seg subseg" id="waterSeg" hidden><button data-w="waves" class="on">Waves</button><button data-w="temp">Temp</button></div><button id="marineChip" class="mchip" hidden></button></div>
 <div id="menu">
   <label><input type="checkbox" id="tFlow" checked>Animated flow lines</label>
   <label><input type="checkbox" id="tObs" checked>Observed wind (stations)</label>
@@ -330,6 +338,7 @@ function currentModel(){
   return (map.getZoom()>=9 && c.lat>SALISH.s+0.3 && c.lat<SALISH.n-0.3 && c.lng>SALISH.w+0.3 && c.lng<SALISH.e-0.3) ? "curS" : "curW";
 }
 function modelFor(layer){
+  if(layer==="surf") layer = "wind";
   if(layer==="wind"||layer==="gust") return {m:"wind", mk: layer==="gust"?"windg":"wind"};
   if(layer==="waves") return {m:"waves", mk: currentModel()==="curS" ? "wavesS" : "waves"};
   const cm = currentModel();
@@ -375,8 +384,10 @@ function loadField(layer, time){
     } else if(g.kind==="temp"){
       for(let i=0;i<n;i++){ const k=A.data[i]; if(!(k>250&&k<320)){ u[i]=v[i]=mag[i]=NaN; continue; } u[i]=v[i]=0; mag[i]=k-273.15; }
     }
+    let landGrid = null;
+    if(g.kind!=="spd-dir"){ landGrid = new Uint8Array(n); for(let i=0;i<n;i++) landGrid[i] = mag[i]!==mag[i] ? 1 : 0; fillLand(A.w, A.h, [u, v, mag, per].filter(Boolean), mag); }
     const type = g.kind==="spd-dir" ? "wind" : g.kind==="uv" ? "current" : g.kind;
-    return {w:A.w, h:A.h, west:A.west, east:A.east, south:A.south, north:A.north, u, v, mag, per, mask, type, mk:req.mk + (mask?"":""), name:g.name};
+    return {w:A.w, h:A.h, west:A.west, east:A.east, south:A.south, north:A.north, u, v, mag, per, mask, landGrid, type, mk:req.mk + (mask?"":""), name:g.name};
   })().catch(e=>{ gridCache.delete(key); throw e; });
   gridCache.set(key, p);
   if(gridCache.size>40){ const k0 = gridCache.keys().next().value; gridCache.delete(k0); }
@@ -400,16 +411,28 @@ function isWater(mk, lat, lon){
   if(x<0||y<0||x>=mk.w||y>=mk.h) return true; // outside mask: trust the wave model
   return mk.d[y*mk.w+x]===1;
 }
+function fillLand(w, h, arrs, key, passes=40){ // grow water values into land (NaN) cells; land is drawn on top anyway
+  const n = w*h; let todo = 0; for(let i=0;i<n;i++) if(key[i]!==key[i]) todo++;
+  for(let p=0; p<passes && todo>0; p++){
+    const fill = [];
+    for(let y=0;y<h;y++) for(let x=0;x<w;x++){ const i=y*w+x; if(key[i]===key[i]) continue;
+      let c=0; const acc = arrs.map(()=>0);
+      for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){ const xx=x+dx, yy=y+dy; if(xx<0||yy<0||xx>=w||yy>=h) continue; const j=yy*w+xx; if(key[j]!==key[j]) continue; c++; arrs.forEach((a,k)=>acc[k]+=a[j]); }
+      if(c) fill.push([i, acc.map(v=>v/c)]); }
+    for(const [i,vals] of fill){ arrs.forEach((a,k)=>a[i]=vals[k]); todo--; }
+    if(!fill.length) break;
+  }
+}
+function gridIsLand(f, lat, lon){ if(!f.landGrid) return false; const x=Math.floor((lon-f.west)/(f.east-f.west)*f.w), y=Math.floor((f.north-lat)/(f.north-f.south)*f.h); if(x<0||y<0||x>=f.w||y>=f.h) return false; return f.landGrid[y*f.w+x]===1; }
 function viewInsideField(){ const v=viewBox(0); return field && v.s>=field.south && v.n<=field.north && v.w>=field.west && v.e<=field.east && field.mk===modelFor(activeKey).mk; }
 function sampleField(f, lat, lon){
   const fx = (lon - f.west)/(f.east - f.west)*f.w - 0.5, fy = (f.north - lat)/(f.north - f.south)*f.h - 0.5;
   if(fx<0||fy<0||fx>=f.w-1||fy>=f.h-1) return null;
-  if(f.mask && !isWater(f.mask, lat, lon)) return null;
   const x0=fx|0, y0=fy|0, ax=fx-x0, ay=fy-y0, i=y0*f.w+x0;
   const ids = [i, i+1, i+f.w, i+f.w+1], ws = [(1-ax)*(1-ay), ax*(1-ay), (1-ax)*ay, ax*ay];
   let sw=0, su=0, sv=0, sm=0, sp=0;
   for(let j=0;j<4;j++){ const m = f.mag[ids[j]]; if(m!==m) continue; const wj=ws[j]; sw+=wj; su+=wj*f.u[ids[j]]; sv+=wj*f.v[ids[j]]; sm+=wj*m; if(f.per) sp+=wj*f.per[ids[j]]; }
-  if(sw < (f.mask ? 0.05 : 0.35)) return null;
+  if(sw < 0.05) return null;
   return [su/sw, sv/sw, sm/sw, f.per? sp/sw : null];
 }
 
@@ -440,7 +463,7 @@ function renderField(){
   let k=0;
   for(let y=0;y<H;y+=step){ const lat = latOfY[Math.min(H,y+2)];
     for(let x=0;x<W;x+=step){ const s = sampleField(field, lat, lonW+(x+2)*lonPerPx);
-      if(s && !(st.minMag && s[2]<st.minMag*0.7)){ const c = ramp(stops, s[2]); d[k]=c[0]; d[k+1]=c[1]; d[k+2]=c[2]; d[k+3]= st.alpha; }
+      if(s){ const c = ramp(stops, s[2]); d[k]=c[0]; d[k+1]=c[1]; d[k+2]=c[2]; d[k+3]= st.alpha; }
       else d[k+3]=0;
       k+=4; } }
   // draw scaled up smoothly
@@ -455,8 +478,8 @@ function seedParticles(){
 }
 function newParticle(rand){
   if(field && field.type==="waves"){ // spawn crests on water only
-    for(let t=0;t<8;t++){ const x=Math.random()*W, y=Math.random()*H, s=sampleField(field, latOfY[y|0], lonW+x*lonPerPx);
-      if(s && s[2]>=0.05) return {x, y, age: rand?Math.floor(Math.random()*90):0, max: 70+Math.floor(Math.random()*50)}; }
+    for(let t=0;t<8;t++){ const x=Math.random()*W, y=Math.random()*H, la=latOfY[y|0], lo=lonW+x*lonPerPx, s=sampleField(field, la, lo);
+      if(s && s[2]>=0.05 && (!field.mask || isWater(field.mask, la, lo))) return {x, y, age: rand?Math.floor(Math.random()*90):0, max: 70+Math.floor(Math.random()*50)}; }
   }
   return {x:Math.random()*W, y:Math.random()*H, age: rand?Math.floor(Math.random()*80):0, max: 50+Math.floor(Math.random()*60)};
 }
@@ -519,7 +542,8 @@ map.on("zoomstart", ()=>{ fieldCv.style.opacity=0; });
 map.on("moveend", ()=>{
   moving=false; layoutCanvases(); clearFlow(); flowCv.style.opacity=1; fieldCv.style.opacity=1;
   if(!field || !viewInsideField()) refreshModel(); else { renderField(); seedParticles(); updateSummary(); }
-  refreshVisibleCurrents(); scheduleCentreForecast(); scheduleMarineChip(); drawTides(); refreshVisibleTides(); clearTimeout(window._ctT); window._ctT=setTimeout(loadCentreTide,700);
+  refreshVisibleCurrents(); scheduleCentreForecast(); scheduleMarineChip();
+  if(activeKey==="surf"){ drawSurf(); if(!surfSel){ drawBars(); updateSummary(); } } drawTides(); refreshVisibleTides(); clearTimeout(window._ctT); window._ctT=setTimeout(loadCentreTide,700);
 });
 map.on("resize", ()=>{ layoutCanvases(); renderField(); seedParticles(); });
 
@@ -532,14 +556,16 @@ function setScale(st){
 }
 async function refreshModel(){
   const seq = ++loadSeq, key = activeKey, time = curTime();
-  setScale(STYLES[key==="gust"?"wind":key]);
+  setScale(STYLES[(key==="gust"||key==="surf")?"wind":key]);
   const wantLand = key==="current"||key==="waves"||key==="temp";
   if(wantLand && !map.hasLayer(landTop)) landTop.addTo(map); else if(!wantLand && map.hasLayer(landTop)) map.removeLayer(landTop);
   $("#waterSeg").hidden = !(key==="waves"||key==="temp");
+  $("#windSeg").hidden = !(key==="wind"||key==="gust");
+  document.querySelectorAll("#windSeg button").forEach(b=>b.classList.toggle("on", b.dataset.w===key));
   document.querySelectorAll("#waterSeg button").forEach(b=>b.classList.toggle("on", b.dataset.w===key));
   setDot("#sMap","load","Loading forecast grid…");
   try{
-    const f = await loadField(key, time);
+    const f = await loadField(key==="surf" ? "wind" : key, time);
     if(seq!==loadSeq) return;
     field = f; $("#modelName").textContent = f.name + (key==="gust"?" · gusts":"");
     $("#note").textContent = "";
@@ -559,9 +585,14 @@ function prefetch(key, time){ for(const h of [1]){ const t = new Date(+time+h*36
 function inSalishView(){ const c = map.getCenter(); return c.lat>SALISH.s && c.lat<SALISH.n && c.lng>SALISH.w && c.lng<SALISH.e; }
 function setLayer(key){
   if(key==="water") key = ls.get("waterSub") || "waves";
+  if(key==="windtop") key = ls.get("windSub") || "wind";
   if(key==="waves"||key==="temp") ls.set("waterSub", key);
+  if(key==="wind"||key==="gust") ls.set("windSub", key);
   activeKey = key; ls.set("layer",key);
-  const top = (key==="waves"||key==="temp") ? "water" : key;
+  const top = (key==="waves"||key==="temp") ? "water" : (key==="wind"||key==="gust") ? "windtop" : key;
+  setTimeout(()=>{ drawTides(); }, 0);
+  if(key==="surf"){ if(map.distance(map.getCenter(),[49.75,-124.95]) > 40000 || map.getZoom() < 10) map.fitBounds(SPOTS.map(sp=>[sp.lat,sp.lon]), {paddingTopLeft:[30,190], paddingBottomRight:[90,250], maxZoom:12}); if(!map.hasLayer(surfLayer)) surfLayer.addTo(map); loadSurf(); }
+  else if(map.hasLayer(surfLayer)) map.removeLayer(surfLayer);
   document.querySelectorAll("#layerSeg button").forEach(b=>b.classList.toggle("on", b.dataset.l===top));
   refreshModel();
 }
@@ -606,7 +637,10 @@ async function loadCentreForecast(){
 }
 function drawBars(){
   const bars = $("#bars"); let html = "";
-  for(let i=0;i<=HOURS;i++){ const f = centreFc?.[i]; const lab = (i%4===0 && f) ? Math.round(f.w) : "";
+  const sp = activeKey==="surf" && surfData ? (surfSel || nearestSpot()) : null, ss = sp ? surfData.res[sp.id]?.series : null;
+  if(ss){ for(let i=0;i<=HOURS;i++){ const r = ss[i]; const lab = (i%4===0 && r && r.ft>=0.8) ? r.ft.toFixed(0) : "";
+      html += `<div style="background:${r?starColor(r.stars):'#1d262e'}">${lab}</div>`; } }
+  else for(let i=0;i<=HOURS;i++){ const f = centreFc?.[i]; const lab = (i%4===0 && f) ? Math.round(f.w) : "";
     html += `<div style="background:${f?windColor(f.w):'#1d262e'}">${lab}</div>`; }
   bars.innerHTML = html;
   let days = "";
@@ -617,6 +651,14 @@ function drawBars(){
 }
 function updateSummary(){
   const d = curTime(); const f = centreFc?.[tIdx];
+  if(activeKey==="surf"){
+    const sp = surfSel || nearestSpot(), r = surfData?.res[sp.id]?.series?.[tIdx];
+    $("#sumMain").innerHTML = r ? `${sp.name.replace(/ \(.*\)/,"")} · <span style="color:${starColor(r.stars)}">${ftRange(r.ft)}</span> <span style="color:${starColor(r.stars)};font-size:12px">${starStr(r.stars)}</span>` : (surfLoading ? "Running surf model…" : "Surf model loading…");
+    $("#sumSub").textContent = r ? `${fmtTime(d,{weekday:"short",hour:"numeric"})}${tIdx===0?" (now)":" · +"+tIdx+" h"} · ${r.T>0.5?r.T.toFixed(0)+" s · ":""}wind ${Math.round(r.kt)} kn ${compass(r.wdir)} ${r.state}` : "Experimental · tap a spot for details";
+    $("#sumSea").hidden = true;
+    const te = $("#sumTide"); te.innerHTML = r ? `<span class="tw">≈</span> Tide ${r.eta.toFixed(1)} m · ${r.type} · surf zone ~${Math.round(r.width)} m` : "";
+    return;
+  }
   $("#sumMain").innerHTML = f ? `<span style="color:${windColor(f.w)}">${Math.round(f.w)} kn</span> ${compass(f.d)} · gusts <span style="color:${windColor(f.g)}">${Math.round(f.g)}</span>` : "Wind forecast loading…";
   let rng = "";
   if(centreFc){ const ws = centreFc.filter(Boolean).map(x=>x.w); if(ws.length) rng = ` · ${Math.round(Math.min(...ws))}–${Math.round(Math.max(...ws))} kn next 48 h`; }
@@ -625,7 +667,8 @@ function updateSummary(){
   if(f && k && Math.abs(pct)>=3) $("#sumMain").insertAdjacentHTML("beforeend", ` <span class="corr" title="Forecast adjusted ${pct>0?"+":""}${pct}%: model ${Math.round(k.model)} kn vs observed ${Math.round(k.obs)} kn at ${k.name}">${pct>0?"▲":"▼"}${Math.abs(pct)}% live</span>`);
   const se = $("#sumSea");
   if(field && (field.type==="waves"||field.type==="temp")){ const c = map.getCenter(); const v = sampleField(field, c.lat, c.lng);
-    if(!v) se.innerHTML = `<span class="tst">No ${field.type==="waves"?"wave":"water"} data at the crosshair (land?)</span>`;
+    const onLand = field.mask ? !isWater(field.mask, c.lat, c.lng) : gridIsLand(field, c.lat, c.lng);
+    if(!v || onLand) se.innerHTML = `<span class="tst">No ${field.type==="waves"?"wave":"water"} data at the crosshair (land?)</span>`;
     else if(field.type==="waves"){ const from = (Math.atan2(-v[0],-v[1])*180/Math.PI+360)%360;
       se.innerHTML = `〰 Waves <span class="sv" style="color:${waveColor(v[2])}">${v[2].toFixed(1)} m</span> · ${v[3]!=null?v[3].toFixed(0)+" s":""} from ${compass(from)}`; }
     else se.innerHTML = `🌡 Water <span class="sv" style="color:${rgb(ramp(TEMP_STOPS,v[2]))}">${v[2].toFixed(1)} °C</span> at surface`;
@@ -780,7 +823,7 @@ function nextTideEvent(d, t){ return d.ev.find(e=>e.t>t) || null; }
 function nearestTideStation(lat, lon){ let best=null, bd=1e9; for(const s of tideStations){ const dd = Math.hypot(s.lat-lat, (s.lon-lon)*Math.cos(lat*Math.PI/180)); if(dd<bd){ bd=dd; best=s; } } return best; }
 function drawTides(){
   tideLayer.clearLayers();
-  if(!$("#tTide").checked || map.getZoom()<9) return;
+  if(!$("#tTide").checked || map.getZoom()<9 || activeKey==="surf") return;
   const b = map.getBounds(); const t = +curTime();
   for(const s of tideStations){
     if(!b.contains([s.lat,s.lon])) continue;
@@ -935,6 +978,146 @@ function openMarine(){
   sh.classList.add("open"); sh.scrollTop=0;
 }
 
+
+/* ============ EXPERIMENTAL surf model: Comox → Williams Beach ============
+   Spot geometry precomputed from CIOPS 500 m land mask (facing + fetch per 10°)
+   and CHS NONNA 10/100 m bathymetry (depth vs distance offshore, m rel. chart datum).
+   Waves: SPM fetch/duration-limited wind-wave growth summed over a ±60° spread,
+   decaying after the wind eases; breaking height via Komar–Gaughan; tide + profile
+   decide break position/type. Uncalibrated – treat as a guide only. */
+const SPOTS = [{"id":"goose","name":"Goose Spit","lat":49.664,"lon":-124.902,"normal":159,"fetch":[2,2,2,2,2,34,24,22,26,32,38,50,152,20,13,10,20,11,6,5,4,4,3,4,4,5,5,6,6,5,3,3,2,2,2,2],"prof":[[0.05,2.4],[0.15,1.2],[0.275,-1.2],[0.425,-2.5],[0.625,-3.7],[0.875,-22.6],[1.25,-41.9],[2,-42.3]]},{"id":"holmes","name":"Point Holmes","lat":49.692,"lon":-124.868,"normal":110,"fetch":[2,28,32,31,23,31,20,19,20,26,32,46,42,78,21,39,13,14,16,11,9,8,2,2,2,2,2,2,2,2,2,2,2,2,2,2],"prof":[[0.275,0],[0.425,-0.6],[0.625,-7.9],[0.875,-9.3],[1.25,-10.8],[2,-10.7]]},{"id":"kye","name":"Kye Bay","lat":49.707,"lon":-124.871,"normal":70,"fetch":[51,35,30,29,24,30,29,20,18,23,30,42,43,82,25,25,15,16,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,43,52,39],"prof":[[0.15,3.7],[0.275,3.7],[0.425,4.5],[0.625,1.8],[0.875,-4.3],[1.25,-4.3],[2,-16.1]]},{"id":"kin","name":"Kin Beach","lat":49.728,"lon":-124.897,"normal":45,"fetch":[28,35,30,29,29,22,30,21,21,21,29,39,48,86,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,5,35,38,49,35],"prof":[[0.15,4.3],[0.275,1.5],[0.425,-2.1],[0.625,-5.2],[0.875,-5.9],[1.25,-6.9],[2,-58.7]]},{"id":"denny","name":"Little River (Denny Rd)","lat":49.738,"lon":-124.906,"normal":40,"fetch":[26,35,30,28,28,24,30,30,22,21,29,37,54,87,29,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,7,36,36,48,32],"prof":[[0.05,-1.8],[0.15,-7.3],[0.275,-15.6],[0.425,-31.1],[0.625,-28.7],[0.875,-47.5],[1.25,-51.2],[2,-55.6]]},{"id":"bates","name":"Bates Beach","lat":49.775,"lon":-124.975,"normal":49,"fetch":[30,22,32,29,28,28,30,24,34,26,26,40,60,96,4,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,6,30,46,32],"prof":[[0.15,-1.1],[0.275,-6.1],[0.425,-8.8],[0.625,-11],[0.875,-19.2],[1.25,-42.1],[2,-58.4]]},{"id":"kitty","name":"Kitty Coleman","lat":49.789,"lon":-124.996,"normal":52,"fetch":[27,23,42,29,22,28,30,26,35,27,27,41,62,99,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,28,42,44],"prof":[[0.15,-0.5],[0.275,-4.6],[0.425,-5.3],[0.625,-8.4],[0.875,-31.1],[1.25,-32.9],[2,-71.3]]},{"id":"williams","name":"Williams Beach","lat":49.835,"lon":-125.059,"normal":42,"fetch":[26,28,28,19,28,28,28,31,35,39,32,34,75,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,7,40,21,35],"prof":[[0.275,-1.5],[0.425,-4],[0.625,-9.8],[0.875,-8.8],[1.25,-65.6],[2,-87.5]]}];
+const G = 9.81, D2R = Math.PI/180;
+const angDiff = (a,b) => { const d = ((a-b)%360+540)%360-180; return d; };
+function movePt(lat, lon, brg, km){ return [lat+Math.cos(brg*D2R)*km/111.32, lon+Math.sin(brg*D2R)*km/(111.32*Math.cos(lat*D2R))]; }
+function radialFetch(sp, dir){ // km, smoothed over ±20°
+  let sum=0, n=0; for(let a=-20;a<=20;a+=10){ const k = Math.round((((dir+a)%360)+360)%360/10)%36; sum += sp.fetch[k]; n++; } return sum/n; }
+function growth(U, Fkm, hours){ // SPM 1984 deep-water, returns [Hs m, Tp s]
+  if(U < 2) return [0, 0];
+  const UA = 0.71*Math.pow(U,1.23), F = Fkm*1000;
+  let X = G*F/(UA*UA);
+  const tmin = 68.8*Math.pow(X,2/3)*UA/G;
+  if(hours*3600 < tmin) X = Math.pow(G*hours*3600/(68.8*UA), 1.5);
+  let H = 0.0016*Math.sqrt(X)*UA*UA/G, T = 0.2857*Math.cbrt(X)*UA/G;
+  H = Math.min(H, 0.2433*UA*UA/G); T = Math.min(T, 8.134*UA/G);
+  return [H, T];
+}
+function zAt(sp, x){ // seabed elevation (m rel. chart datum) at x km offshore; beach top assumed +5 m
+  const pts = [[0, 5], ...sp.prof.filter(p=>p[0]>0.0)];
+  if(sp.prof[0] && sp.prof[0][0] <= 0.06) pts[0] = [0, Math.max(sp.prof[0][1]+1, 2)];
+  for(let i=1;i<pts.length;i++) if(x<=pts[i][0]){ const [x0,z0]=pts[i-1],[x1,z1]=pts[i]; return z0+(z1-z0)*(x-x0)/(x1-x0); }
+  return pts.at(-1)[1];
+}
+function breakInfo(sp, Hb, T, eta){
+  const db = Hb/0.78;
+  let xs = null, xb = null;
+  for(let x=0; x<=2.5; x+=0.005){ const d = eta - zAt(sp,x); if(xs===null && d>0) xs = x; if(d >= db){ xb = x; break; } }
+  if(xs===null) xs = 0; if(xb===null) xb = 2.5;
+  const width = Math.max(0, (xb - xs)*1000);               // surf-zone width, m
+  const dz = (eta - zAt(sp, xb)) - (eta - zAt(sp, Math.max(xs, xb-0.05)));
+  const slope = Math.max(0.002, dz / (Math.max(0.005, xb - Math.max(xs, xb-0.05))*1000));
+  const L0 = G*T*T/(2*Math.PI), xi = T>0 && Hb>0 ? slope/Math.sqrt(Hb/L0) : 0;
+  const type = (xi > 2 || width < 15) ? "shorebreak" : xi > 0.4 ? "plunging" : "spilling";
+  return {width, slope, xi, type};
+}
+function surfSeries(sp, wind, tide){
+  // wind: {t:[unix], u:[m/s], d:[deg from]} hourly incl. 24 h history; returns per forecast hour 0..HOURS
+  const out = []; let seaH=0, seaT=0, seaD=0, lastIdx=-1;
+  const iNow = wind.t.findIndex(t => t >= +t0/1000);
+  for(let i=0;i<wind.t.length;i++){
+    const U = wind.u[i], D = wind.d[i];
+    let hrs = 1; for(let k=i-1;k>=0 && hrs<24;k--){ if(Math.abs(angDiff(wind.d[k],D))<=30 && wind.u[k]>=0.5*U) hrs++; else break; }
+    // spread the sea over ±60° with cos² weights; each sub-direction uses its own fetch
+    let eDeep=0, eShore=0, wsum=0, tBest=0, wBest=0;
+    for(let a=-60;a<=60;a+=10){ const w = Math.pow(Math.cos(a*D2R),2), dir = D+a; const [H,T] = growth(U, radialFetch(sp,dir), hrs);
+      wsum += w; eDeep += w*H*H; const th = angDiff(dir, sp.normal); const c = Math.cos(th*D2R);
+      if(c>0){ eShore += w*H*H*c; if(w*H*H*c > wBest){ wBest = w*H*H*c; tBest = T; } } }
+    const Hshore = Math.sqrt(eShore/wsum), Tg = tBest;
+    // persistence: once the wind eases, waves already crossing the strait keep arriving (~4 h e-folding)
+    if(i>0){ const decay = Math.exp(-1/4); if(Hshore < seaH*decay){ seaH *= decay; seaT *= 0.985; } else { seaH = Hshore; seaT = Tg; seaD = D; } }
+    else { seaH = Hshore; seaT = Tg; seaD = D; }
+    if(iNow<0 || i < iNow || out.length > HOURS) continue;
+    const t = wind.t[i]*1000;
+    const eta = tide ? (interp(tide.ser, t) ?? 2.5) : 2.5;
+    const Hb = seaH>0.05 && seaT>0 ? 0.39*Math.pow(G,0.2)*Math.pow(seaT*seaH*seaH, 0.4) : 0;
+    const bi = breakInfo(sp, Hb, seaT, eta);
+    // wind quality at the spot
+    const kt = U*MS2KT, rel = Math.abs(angDiff(D, sp.normal));
+    const state = kt < 5 ? "glassy" : rel < 45 ? "onshore" : rel > 135 ? "offshore" : "cross-shore";
+    let size = Hb<0.25 ? 0 : Math.min(4, (Hb-0.25)/0.25);
+    if(bi.width > 250){ size *= 0.75; }
+    let q = 0;
+    if(seaT >= 6) q += 0.5; else if(seaT < 4) q -= 0.5;
+    if(bi.type==="plunging") q += 0.25; else if(bi.type==="shorebreak") q -= 0.75;
+    if(bi.width > 250) q -= 0.5;
+    if(state==="onshore") q -= kt>28?3 : kt>20?2 : kt>12?1 : kt>6?0.5 : 0;
+    else if(state==="cross-shore") q -= kt>25?2 : kt>18?1.25 : kt>12?0.6 : kt>8?0.25 : 0;
+    else if(state==="offshore") q += kt<20 ? 0.5 : -0.5;
+    else q += 0.5;
+    const stars = size<=0 ? 0 : Math.max(0, Math.min(5, size + q));
+    out.push({t, Hb, ft:Hb*3.281, T:seaT, dir:seaD, kt, wdir:D, state, eta, stars, ...bi});
+  }
+  return out;
+}
+let surfData = null, surfSel = null, surfLoading = false;
+const surfLayer = L.layerGroup();
+const ftRange = ft => ft < 0.8 ? "flat" : ft < 1.5 ? "1 ft" : `${Math.floor(ft)}–${Math.ceil(ft+0.5)} ft`;
+const starColor = s => s<0.75 ? "#5b6670" : s<1.75 ? "#5e8fb0" : s<2.75 ? "#5fae73" : s<3.75 ? "#e2c044" : "#ef7d3c";
+const starStr = s => "★".repeat(Math.round(s)) + "☆".repeat(5-Math.round(s));
+async function loadSurf(force){
+  if(surfLoading) return; if(!force && surfData && Date.now()-surfData.at < 30*60e3){ drawSurf(); return; }
+  surfLoading = true; setDot("#sMap","load","Loading surf model inputs…");
+  try{
+    const off = SPOTS.map(sp => movePt(sp.lat, sp.lon, sp.normal, 1.5));
+    const j = await fetchJSON(`https://api.open-meteo.com/v1/forecast?latitude=${off.map(p=>p[0].toFixed(3)).join(",")}&longitude=${off.map(p=>p[1].toFixed(3)).join(",")}&hourly=wind_speed_10m,wind_direction_10m&models=gem_seamless&wind_speed_unit=ms&timezone=GMT&past_hours=24&forecast_hours=50&timeformat=unixtime`,{timeout:15000});
+    const arr = Array.isArray(j) ? j : [j];
+    if(!tideStations.length) await loadCurStations();
+    const res = {};
+    for(let i=0;i<SPOTS.length;i++){ const sp = SPOTS[i], h = arr[i].hourly;
+      let tide = null; const ts = nearestTideStation(sp.lat, sp.lon); if(ts){ try{ tide = await getTideSeries(ts); }catch(e){} }
+      res[sp.id] = {series: surfSeries(sp, {t:h.time, u:h.wind_speed_10m, d:h.wind_direction_10m}, tide), tideName: ts?.name}; }
+    surfData = {at:Date.now(), res};
+    setDot("#sMap","ok","Surf model updated");
+  }catch(e){ console.error("surf model:", e); setDot("#sMap","bad","Surf model inputs failed – tap ⟳"); }
+  surfLoading = false; drawSurf(); drawBars(); updateSummary();
+}
+function nearestSpot(){ const c = map.getCenter(); let b=null, bd=1e12; for(const sp of SPOTS){ const d = map.distance(c,[sp.lat,sp.lon]); if(d<bd){ bd=d; b=sp; } } return b; }
+function drawSurf(){
+  surfLayer.clearLayers(); if(activeKey!=="surf" || !surfData) return;
+  for(const sp of SPOTS){ const r = surfData.res[sp.id]?.series?.[tIdx]; if(!r) continue;
+    const big = map.getZoom() >= 12, col = starColor(r.stars), sz = r.ft<0.8 ? "flat" : ftRange(r.ft).replace(" ft","");
+    const html = big ? `<div class="surfpin" style="border-color:${col}"><b>${ftRange(r.ft)}</b><span style="color:${col}">${starStr(r.stars)}</span><small>${sp.name.replace(/ \(.*\)/,"")}</small></div>`
+                     : `<div class="surfpin sm" style="border-color:${col};background:${col}"><b>${sz}</b>${r.stars>=0.5?`<span>★${Math.round(r.stars)}</span>`:""}</div>`;
+    L.marker([sp.lat,sp.lon],{pane:"marks", icon:L.divIcon({className:"", html, iconSize: big?[92,46]:[50,22], iconAnchor: big?[46,52]:[25,11]})})
+      .on("click", ev=>{ L.DomEvent.stopPropagation(ev); surfSel = sp; drawBars(); updateSummary(); openSurf(sp); }).addTo(surfLayer); }
+}
+function openSurf(sp){
+  const d = surfData?.res[sp.id]; if(!d) return;
+  const S = d.series; const sh = $("#sheet");
+  // best windows: consecutive hours ≥ 2.5 stars
+  const wins=[]; let cur=null; S.forEach((r,i)=>{ if(r.stars>=2.5){ if(!cur) cur={a:i,b:i,best:r}; else { cur.b=i; if(r.stars>cur.best.stars) cur.best=r; } } else if(cur){ wins.push(cur); cur=null; } }); if(cur) wins.push(cur);
+  let hdr="<tr><th class='rowlab'>Local</th>", rS="<tr><td class='rowlab'>Surf</td>", rR="<tr><td class='rowlab'>Rating</td>", rT="<tr><td class='rowlab'>Period</td>", rW="<tr><td class='rowlab'>Wind</td>", rX="<tr><td class='rowlab'>Tide m</td>";
+  S.forEach((r,i)=>{ const dt=new Date(r.t), cls=(localHour(dt)===0?"d ":"")+(i===tIdx?"now":"");
+    hdr += `<th class="${localHour(dt)===0?'d':''}">${localHour(dt)===0? fmtDay(dt).split(" ")[0] : fmtTime(dt,{hour:"numeric"}).replace(/\s?[ap]\.?m\.?/i,m=>m.trim()[0].toLowerCase())}</th>`;
+    rS += `<td class="${cls}" style="background:${starColor(r.stars)};color:#fff;font-weight:700">${r.ft<0.8?"–":r.ft.toFixed(1)}</td>`;
+    rR += `<td class="${cls}" style="color:${starColor(r.stars)};font-weight:700">${r.stars>=0.5?Math.round(r.stars):""}</td>`;
+    rT += `<td class="${cls}" style="color:#9fb3c1">${r.T>0.5?Math.round(r.T):"–"}</td>`;
+    rW += `<td class="${cls}" title="${r.state}">${arrowSVG((r.wdir+180)%360, r.state==="offshore"?"#9ccc65":r.state==="onshore"?"#ef9a9a":"#cfe3f3",14)}<br>${Math.round(r.kt)}</td>`;
+    rX += `<td class="${cls}" style="color:#7fb6d3">${r.eta.toFixed(1)}</td>`; });
+  const now = S[tIdx];
+  const fmtWin = w => `<div><span><b>${fmtTime(new Date(S[w.a].t),{weekday:"short",hour:"numeric"})}</b> – ${fmtTime(new Date(S[w.b].t+3600e3),{hour:"numeric"})}</span><span style="color:${starColor(w.best.stars)}">${ftRange(w.best.ft)} ${starStr(w.best.stars)}</span></div>`;
+  const seF = Math.round(radialFetch(sp, 130)), eF = Math.round(radialFetch(sp, 90));
+  sh.innerHTML = sheetHead(sp.name, `Experimental surf estimate · faces ${compass(sp.normal)} (${sp.normal}°)`) +
+    `<div class="kv"><div><span>At ${fmtTime(curTime(),{weekday:"short",hour:"numeric"})}</span><b style="color:${starColor(now.stars)}">${ftRange(now.ft)}</b><span>${starStr(now.stars)} · ${now.T>0.5?now.T.toFixed(0)+" s":""} ${now.type}</span></div>
+      <div><span>Wind at spot</span><b>${Math.round(now.kt)} kn</b><span>${compass(now.wdir)} · ${now.state}</span></div>
+      <div><span>Tide (${d.tideName||"nearest"})</span><b>${now.eta.toFixed(1)} m</b><span>surf zone ~${Math.round(now.width)} m wide</span></div>
+      <div><span>Exposure</span><b style="font-size:16px">SE ${seF} km · E ${eF} km</b><span>open-water fetch</span></div></div>
+     <div class="sec-t">Next 48 h · surf face height (ft)</div><div class="strip"><table>${hdr}</tr>${rS}</tr>${rR}</tr>${rT}</tr>${rW}</tr>${rX}</tr></table></div>
+     <div class="sec-t">Best windows (≥ 3★)</div><div class="ev">${wins.length? wins.slice(0,6).map(fmtWin).join("") : "<div class='s'>Nothing rideable forecast in the next 48 h</div>"}</div>
+     <div class="muted" style="padding-top:10px;line-height:1.5"><b>Experimental, not calibrated.</b> Built from forecast wind (ECCC HRDPS), the spot's open-water fetch, how long the wind has blown, the CHS tide, and CHS NONNA seabed depths. It doesn't know about sandbars, kelp, rocks or local quirks – please compare with what you actually see so it can be tuned.</div>`;
+  sh.classList.add("open"); sh.scrollTop=0;
+  const st = sh.querySelector(".strip"), nc = st?.querySelector("td.now"); if(nc) st.scrollLeft = Math.max(0, nc.offsetLeft-80);
+}
+
 /* ============ spot forecast sheet ============ */
 let tapMarker = null;
 function closeSheet(){ $("#sheet").classList.remove("open"); if(tapMarker){ map.removeLayer(tapMarker); tapMarker=null; } }
@@ -1062,7 +1245,7 @@ function drawSpark(cv, d, sel){
 
 /* ============ wiring ============ */
 document.querySelectorAll("#layerSeg button").forEach(b=>b.onclick=()=>setLayer(b.dataset.l));
-document.querySelectorAll("#waterSeg button").forEach(b=>b.onclick=()=>setLayer(b.dataset.w));
+document.querySelectorAll("#waterSeg button, #windSeg button").forEach(b=>b.onclick=()=>setLayer(b.dataset.w));
 $("#marineChip").onclick = e=>{ e.stopPropagation(); openMarine(); };
 $("#btnMenu").onclick = e=>{ e.stopPropagation(); $("#menu").classList.toggle("open"); };
 document.addEventListener("click", e=>{ if(!$("#menu").contains(e.target) && e.target!==$("#btnMenu")) $("#menu").classList.remove("open"); });
@@ -1075,7 +1258,7 @@ $("#tSea").onchange = ()=>{ ls.set("tSea",$("#tSea").checked); $("#tSea").checke
 let tTimer=null;
 function setTime(i, immediate){
   tIdx = Math.max(0, Math.min(HOURS, i)); $("#slider").value = tIdx;
-  updateSummary(); drawCurrents(); drawTides();
+  updateSummary(); drawCurrents(); drawTides(); if(activeKey==="surf") drawSurf();
   clearTimeout(tTimer); tTimer = setTimeout(refreshModel, immediate?0:200);
 }
 $("#slider").oninput = ()=> setTime(+$("#slider").value);
@@ -1092,7 +1275,7 @@ $("#btnPlay").onclick = async ()=>{
 };
 $("#btnHome").onclick = ()=> map.setView(HOME.c, HOME.z);
 $("#btnNow").onclick = ()=> setTime(0, true);
-$("#btnRefresh").onclick = ()=>{ gridCache.clear(); for(const k in curCache) delete curCache[k]; for(const k in tideCache) delete tideCache[k]; centreTide=null; centreTideSt=null; centreFc=null; centreFcRaw=null; centreCorr=null; lastCentre=null; loadObs(); loadCurStations(); refreshModel(); loadCentreForecast(); };
+$("#btnRefresh").onclick = ()=>{ gridCache.clear(); for(const k in curCache) delete curCache[k]; for(const k in tideCache) delete tideCache[k]; surfData=null; if(activeKey==="surf") setTimeout(()=>loadSurf(true), 1500); centreTide=null; centreTideSt=null; centreFc=null; centreFcRaw=null; centreCorr=null; lastCentre=null; loadObs(); loadCurStations(); refreshModel(); loadCentreForecast(); };
 $("#btnLoc").onclick = ()=>{ if(!navigator.geolocation) return; navigator.geolocation.getCurrentPosition(p=>{ map.setView([p.coords.latitude,p.coords.longitude], Math.max(map.getZoom(),10)); L.circleMarker([p.coords.latitude,p.coords.longitude],{radius:7,color:"#fff",fillColor:"#2196f3",fillOpacity:1,weight:3,pane:"marks"}).addTo(map); }, ()=>{ $("#note").textContent="Location unavailable."; }, {enableHighAccuracy:true,timeout:10000}); };
 map.on("click", e=>{ if($("#sheet").classList.contains("open")) { closeSheet(); return; } openSpot(e.latlng.lat, e.latlng.lng); });
 
@@ -1104,7 +1287,7 @@ if(ls.get("tCur")===false) $("#tCur").checked=false;
 if(ls.get("tTide")===false) $("#tTide").checked=false;
 if(ls.get("tSea")) { $("#tSea").checked=true; seamarks.addTo(map); }
 layoutCanvases(); drawBars(); updateSummary();
-setLayer(ls.get("layer")==="temp"||ls.get("layer")==="waves" ? ls.get("layer") : (ls.get("layer") || "wind"));
+setLayer(ls.get("layer") || "wind");
 loadCentreForecast(); loadObs(); loadCurStations(); loadMarine();
 setInterval(loadMarine, 30*60e3);
 setInterval(loadObs, 10*60e3);
