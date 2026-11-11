@@ -110,6 +110,7 @@
   .leaflet-bottom{bottom:calc(env(safe-area-inset-bottom) + 192px)}
   .tapmark{width:14px;height:14px;border:3px solid #fff;border-radius:50%;background:#7cb342;box-shadow:0 0 0 2px #000}
   .flowcv{position:absolute;left:0;top:0;pointer-events:none}
+  .basemap{filter:brightness(1.3) contrast(1.1)}
 </style>
 </head>
 <body>
@@ -227,8 +228,11 @@ const curTime = () => new Date(+t0 + tIdx*3600e3);
 
 /* ============ map ============ */
 const HOME = {c:[49.712,-124.895], z:11}; // Comox harbour – Little River
-const map = L.map("map",{zoomControl:false, attributionControl:true, preferCanvas:false}).setView(HOME.c, HOME.z);
-L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{maxZoom:18, subdomains:"abcd", attribution:"© OpenStreetMap © CARTO"}).addTo(map);
+const map = L.map("map",{zoomControl:false, attributionControl:true, preferCanvas:false, maxZoom:16}).setView(HOME.c, HOME.z);
+const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/";
+L.tileLayer(ESRI+"World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",{maxZoom:16, maxNativeZoom:16, className:"basemap", attribution:"Esri, HERE, Garmin, © OpenStreetMap contributors"}).addTo(map);
+map.createPane("labels"); map.getPane("labels").style.zIndex = 640; map.getPane("labels").style.pointerEvents = "none";
+L.tileLayer(ESRI+"World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}",{maxZoom:16, maxNativeZoom:16, pane:"labels"}).addTo(map);
 const seamarks = L.tileLayer("https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png",{maxZoom:17, attribution:"OpenSeaMap", opacity:.9});
 map.createPane("flow"); map.getPane("flow").style.zIndex = 300; map.getPane("flow").style.pointerEvents = "none";
 map.createPane("model"); map.getPane("model").style.zIndex = 320;
@@ -331,7 +335,7 @@ function renderField(){
   let k=0;
   for(let y=0;y<H;y+=step){ const lat = latOfY[Math.min(H,y+2)];
     for(let x=0;x<W;x+=step){ const s = sampleField(field, lat, lonW+(x+2)*lonPerPx);
-      if(s && !(field.isCurrent && s[2]<0.03)){ const c = ramp(stops, s[2]); d[k]=c[0]; d[k+1]=c[1]; d[k+2]=c[2]; d[k+3]= field.isCurrent?150:120; }
+      if(s && !(field.isCurrent && s[2]<0.03)){ const c = ramp(stops, s[2]); d[k]=c[0]; d[k+1]=c[1]; d[k+2]=c[2]; d[k+3]= field.isCurrent?150:85; }
       else d[k+3]=0;
       k+=4; } }
   // draw scaled up smoothly
