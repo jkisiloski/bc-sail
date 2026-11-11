@@ -69,8 +69,26 @@
   #tideRow .tlab{position:absolute;right:6px;bottom:3px;font:600 10px system-ui;color:#7fb6d3;background:rgba(20,27,33,.7);padding:0 3px;border-radius:3px}
   #sumTide{color:#9fd3ef!important}
   #sumSea{color:#d7e4ec!important}
+  .corr{display:inline-block;vertical-align:middle;font:700 10px system-ui;color:#c5e1a5;border:1px solid #6f8f55;border-radius:6px;padding:1px 5px;margin-left:2px}
   #sumSea .sv{font-weight:700}
-  #waterSeg{position:absolute;z-index:1000;top:calc(env(safe-area-inset-top) + 118px);left:10px;flex:none}
+  .row3{position:absolute;z-index:1000;top:calc(env(safe-area-inset-top) + 118px);left:10px;right:10px;display:flex;gap:8px;align-items:stretch;pointer-events:none}
+  .row3>*{pointer-events:auto}
+  #waterSeg{flex:none}
+  #waterSeg[hidden]{display:none}
+  .mchip{min-width:0;max-width:100%;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px 12px;color:var(--txt);font:600 12px system-ui;text-align:left}
+  .mchip[hidden]{display:none}
+  .mchip b{font-size:13px;white-space:nowrap}
+  .mchip span{color:var(--mut);font-weight:500;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+  .mchip.warn{background:rgba(120,72,0,.92);border-color:#ffb300}
+  .mchip.warn span{color:#ffe0a3}
+  .mchip.storm{background:rgba(130,20,20,.92);border-color:#ef5350}
+  .mchip.storm span{color:#ffc9c9}
+  .mwarn{margin:0 14px 8px;padding:10px 12px;border-radius:10px;background:rgba(120,72,0,.6);border:1px solid #ffb300;font-weight:700}
+  .mloc{margin:6px 14px;padding:10px 12px;border-radius:12px;background:#1b232b;border:1px solid var(--line)}
+  .mloc b{display:block;font-size:14px}
+  .mloc small{color:var(--mut)}
+  .mloc p{margin:8px 0 0;font-size:13px;line-height:1.45}
+  .mk{display:inline-block;min-width:62px;color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
   #waterSeg button{padding:8px 16px;font-size:13px}
   #sumTide .tst{color:var(--mut)}
   .tw{color:#4fc3f7;font-size:10px}
@@ -142,10 +160,11 @@
   <div class="pill" id="modelPill"><span class="ldot"></span><span id="modelName">HRDPS 2.5 km</span></div>
   <div id="scale"><div class="bar" id="scaleBar"></div><div class="lbl" id="scaleLbl"></div></div>
 </div>
-<div class="seg" id="waterSeg" hidden><button data-w="waves" class="on">Waves</button><button data-w="temp">Temp</button></div>
+<div class="row3"><div class="seg" id="waterSeg" hidden><button data-w="waves" class="on">Waves</button><button data-w="temp">Temp</button></div><button id="marineChip" class="mchip" hidden></button></div>
 <div id="menu">
   <label><input type="checkbox" id="tFlow" checked>Animated flow lines</label>
   <label><input type="checkbox" id="tObs" checked>Observed wind (stations)</label>
+  <label><input type="checkbox" id="tCorr" checked>Correct forecast with live stations</label>
   <label><input type="checkbox" id="tTide" checked>Tide heights (zoom in)</label>
   <label><input type="checkbox" id="tCur" checked>Tidal current stations</label>
   <label><input type="checkbox" id="tSea">Seamarks (OpenSeaMap)</label>
@@ -263,6 +282,22 @@ const seamarks = L.tileLayer("https://tiles.openseamap.org/seamark/{z}/{x}/{y}.p
 map.createPane("flow"); map.getPane("flow").style.zIndex = 300; map.getPane("flow").style.pointerEvents = "none";
 map.createPane("model"); map.getPane("model").style.zIndex = 320;
 map.createPane("marks"); map.getPane("marks").style.zIndex = 650;
+map.createPane("land"); map.getPane("land").style.zIndex = 330; map.getPane("land").style.pointerEvents = "none";
+const LandOnly = L.GridLayer.extend({ // Esri base tiles with the water made transparent
+  createTile(coords, done){
+    const c = document.createElement("canvas"); c.width = c.height = 256;
+    const im = new Image(); im.crossOrigin = "anonymous";
+    im.onload = () => { const g = c.getContext("2d"); g.drawImage(im,0,0);
+      try{ const d = g.getImageData(0,0,256,256), a = d.data;
+        for(let i=0;i<a.length;i+=4){ const l = (a[i]+a[i+1]+a[i+2])/3; a[i+3] = l<=41 ? 0 : l>=64 ? 255 : Math.round((l-41)/23*255); }
+        g.putImageData(d,0,0); }catch(e){ g.clearRect(0,0,256,256); }
+      done(null, c); };
+    im.onerror = () => done(null, c);
+    im.src = `${ESRI}World_Dark_Gray_Base/MapServer/tile/${coords.z}/${coords.y}/${coords.x}`;
+    return c;
+  }
+});
+const landTop = new LandOnly({pane:"land", maxZoom:16, maxNativeZoom:16, className:"basemap"});
 map.attributionControl.addAttribution("ECCC MSC · DFO CHS · Open-Meteo");
 
 /* ============ gridded data (MSC GeoMet WCS → GeoTIFF) ============ */
@@ -484,7 +519,7 @@ map.on("zoomstart", ()=>{ fieldCv.style.opacity=0; });
 map.on("moveend", ()=>{
   moving=false; layoutCanvases(); clearFlow(); flowCv.style.opacity=1; fieldCv.style.opacity=1;
   if(!field || !viewInsideField()) refreshModel(); else { renderField(); seedParticles(); updateSummary(); }
-  refreshVisibleCurrents(); scheduleCentreForecast(); drawTides(); refreshVisibleTides(); clearTimeout(window._ctT); window._ctT=setTimeout(loadCentreTide,700);
+  refreshVisibleCurrents(); scheduleCentreForecast(); scheduleMarineChip(); drawTides(); refreshVisibleTides(); clearTimeout(window._ctT); window._ctT=setTimeout(loadCentreTide,700);
 });
 map.on("resize", ()=>{ layoutCanvases(); renderField(); seedParticles(); });
 
@@ -498,6 +533,8 @@ function setScale(st){
 async function refreshModel(){
   const seq = ++loadSeq, key = activeKey, time = curTime();
   setScale(STYLES[key==="gust"?"wind":key]);
+  const wantLand = key==="current"||key==="waves"||key==="temp";
+  if(wantLand && !map.hasLayer(landTop)) landTop.addTo(map); else if(!wantLand && map.hasLayer(landTop)) map.removeLayer(landTop);
   $("#waterSeg").hidden = !(key==="waves"||key==="temp");
   document.querySelectorAll("#waterSeg button").forEach(b=>b.classList.toggle("on", b.dataset.w===key));
   setDot("#sMap","load","Loading forecast grid…");
@@ -530,19 +567,42 @@ function setLayer(key){
 }
 
 /* ============ timeline (wind at map centre) ============ */
-let centreFc = null, centreTimer = null, lastCentre = null;
+let centreFc = null, centreFcRaw = null, centreCorr = null, centreTimer = null, lastCentre = null;
+async function computeCorrection(){
+  centreCorr = null;
+  if(!$("#tCorr").checked || !obsData || !centreFcRaw) return;
+  const c = map.getCenter(), now = Date.now();
+  const cands = obsData.list.filter(s => s.spd!=null && now - new Date(s.t) < 100*60e3)
+    .map(s => ({s, d: map.distance(c,[s.lat,s.lon])})).filter(x => x.d < 30000).sort((a,b)=>a.d-b.d);
+  if(!cands.length) return;
+  const {s, d} = cands[0];
+  try{
+    const j = await fetchJSON(`https://api.open-meteo.com/v1/forecast?latitude=${s.lat.toFixed(3)}&longitude=${s.lon.toFixed(3)}&hourly=wind_speed_10m&models=gem_seamless&wind_speed_unit=kn&timezone=GMT&past_hours=3&forecast_hours=2&timeformat=unixtime`,{timeout:10000,tries:2});
+    const ot = Math.round(+new Date(s.t)/3600e3)*3600, k = j.hourly.time.indexOf(ot), m = k>=0 ? j.hourly.wind_speed_10m[k] : null;
+    if(m==null || (m<4 && s.spd<4)) return;
+    const r = Math.max(0.6, Math.min(1.6, (s.spd+1)/(m+1)));
+    centreCorr = {name:s.name, d, r, obs:s.spd, model:m, w0: Math.max(0, 1 - d/30000)};
+  }catch(e){}
+}
+function applyCorrection(){
+  if(!centreFcRaw){ centreFc = null; return; }
+  const k = centreCorr;
+  centreFc = centreFcRaw.map((f,i)=>{ if(!f || !k) return f; const fac = 1 + (k.r-1)*k.w0*Math.exp(-i/6); return {w:f.w*fac, g:f.g*fac, d:f.d, raw:f.w}; });
+}
+async function refreshCorrection(){ await computeCorrection(); applyCorrection(); drawBars(); updateSummary(); }
 function scheduleCentreForecast(){ clearTimeout(centreTimer); centreTimer = setTimeout(loadCentreForecast, 700); }
 async function loadCentreForecast(){
   const c = map.getCenter();
-  if(lastCentre && map.distance(c,lastCentre) < 4000 && centreFc) return;
+  if(lastCentre && map.distance(c,lastCentre) < 4000 && centreFcRaw) return;
   lastCentre = c;
   try{
     const j = await fetchJSON(`https://api.open-meteo.com/v1/forecast?latitude=${c.lat.toFixed(3)}&longitude=${c.lng.toFixed(3)}&hourly=wind_speed_10m,wind_gusts_10m,wind_direction_10m&models=gem_seamless&wind_speed_unit=kn&timezone=GMT&forecast_days=4&timeformat=unixtime`,{timeout:12000});
     const h = j.hourly, byT = {}; h.time.forEach((t,i)=>byT[t]=i);
-    centreFc = Array.from({length:HOURS+1},(_,i)=>{ const t = (+t0/1000)+i*3600, k = byT[t]; return k==null?null:{w:h.wind_speed_10m[k], g:h.wind_gusts_10m[k], d:h.wind_direction_10m[k]}; });
-    ls.set("centreFc",{at:Date.now(), c:[c.lat,c.lng], t0:+t0, fc:centreFc});
-  }catch(e){ const s = ls.get("centreFc"); if(s && s.t0===+t0) centreFc = s.fc; }
-  drawBars(); updateSummary();
+    centreFcRaw = Array.from({length:HOURS+1},(_,i)=>{ const t = (+t0/1000)+i*3600, k = byT[t]; return k==null?null:{w:h.wind_speed_10m[k], g:h.wind_gusts_10m[k], d:h.wind_direction_10m[k]}; });
+    ls.set("centreFc",{at:Date.now(), c:[c.lat,c.lng], t0:+t0, fc:centreFcRaw});
+  }catch(e){ const s = ls.get("centreFc"); if(s && s.t0===+t0) centreFcRaw = s.fc; }
+  applyCorrection(); drawBars(); updateSummary();
+  refreshCorrection();
 }
 function drawBars(){
   const bars = $("#bars"); let html = "";
@@ -560,7 +620,9 @@ function updateSummary(){
   $("#sumMain").innerHTML = f ? `<span style="color:${windColor(f.w)}">${Math.round(f.w)} kn</span> ${compass(f.d)} · gusts <span style="color:${windColor(f.g)}">${Math.round(f.g)}</span>` : "Wind forecast loading…";
   let rng = "";
   if(centreFc){ const ws = centreFc.filter(Boolean).map(x=>x.w); if(ws.length) rng = ` · ${Math.round(Math.min(...ws))}–${Math.round(Math.max(...ws))} kn next 48 h`; }
+  const k = centreCorr, pct = k ? Math.round((k.r-1)*k.w0*Math.exp(-tIdx/6)*100) : 0;
   $("#sumSub").textContent = `${fmtTime(d,{weekday:"short",hour:"numeric"})}${tIdx===0?" (now)":" · +"+tIdx+" h"}${rng}`;
+  if(f && k && Math.abs(pct)>=3) $("#sumMain").insertAdjacentHTML("beforeend", ` <span class="corr" title="Forecast adjusted ${pct>0?"+":""}${pct}%: model ${Math.round(k.model)} kn vs observed ${Math.round(k.obs)} kn at ${k.name}">${pct>0?"▲":"▼"}${Math.abs(pct)}% live</span>`);
   const se = $("#sumSea");
   if(field && (field.type==="waves"||field.type==="temp")){ const c = map.getCenter(); const v = sampleField(field, c.lat, c.lng);
     if(!v) se.innerHTML = `<span class="tst">No ${field.type==="waves"?"wave":"water"} data at the crosshair (land?)</span>`;
@@ -604,7 +666,7 @@ async function loadObs(){
   }catch(e){
     setDot("#sObs", obsData ? "stale":"bad", obsData ? "Observations offline – showing saved data" : "Observations failed – tap ⟳");
   }
-  drawObs();
+  drawObs(); if(typeof refreshCorrection==="function" && centreFcRaw) refreshCorrection();
 }
 function drawObs(){
   obsLayer.clearLayers();
@@ -797,6 +859,82 @@ function drawTideSpark(cv, d, sel){
   c.fillStyle="#8fa7bd"; c.textAlign="left"; for(let t=pts[0][0]; t<pts.at(-1)[0]; t+=3600e3){ const d0=new Date(t); if(localHour(d0)===0){ c.fillRect(x(t),0,1,H); c.fillText(fmtDay(d0),x(t)+3,10);} }
 }
 
+
+/* ============ ECCC marine forecast & warnings ============ */
+let marineAreas = null, marineSel = null;
+async function loadMarine(){
+  try{
+    const j = await fetchJSON(`${OGC}/marineweather-realtime/items?f=json&limit=300&lang=en`,{timeout:20000});
+    marineAreas = j.features.filter(f=>f.properties?.area?.region?.en==="Pacific Coast" && f.geometry);
+    ls.set("marine",{at:Date.now(), a:marineAreas});
+  }catch(e){ const c = ls.get("marine"); if(c) marineAreas = c.a; }
+  updateMarineChip();
+}
+function rings(g){ return g.type==="Polygon" ? [g.coordinates[0]] : g.type==="MultiPolygon" ? g.coordinates.map(p=>p[0]) : []; }
+function pip(x, y, ring){ let ins=false; for(let i=0,j=ring.length-1;i<ring.length;j=i++){ const xi=ring[i][0], yi=ring[i][1], xj=ring[j][0], yj=ring[j][1]; if(((yi>y)!==(yj>y)) && (x < (xj-xi)*(y-yi)/(yj-yi)+xi)) ins=!ins; } return ins; }
+function marineAreaAt(lat, lon){
+  if(!marineAreas) return null;
+  let best=null, bd=1e9;
+  for(const f of marineAreas){
+    for(const r of rings(f.geometry)){
+      if(pip(lon,lat,r)) return {f, inside:true};
+      for(let i=0;i<r.length;i+=3){ const d = Math.hypot((r[i][0]-lon)*Math.cos(lat*Math.PI/180), r[i][1]-lat); if(d<bd){ bd=d; best=f; } }
+    }
+  }
+  return best && bd < 0.35 ? {f:best, inside:false} : null;
+}
+function pickSubArea(f, lat, lon){
+  const locs = f.properties.regularForecast?.locations || []; if(locs.length<=1) return locs[0]||null;
+  const r = rings(f.geometry)[0]; const xs=r.map(c=>c[0]), ys=r.map(c=>c[1]);
+  const cx=(Math.min(...xs)+Math.max(...xs))/2, cy=(Math.min(...ys)+Math.max(...ys))/2;
+  const NANAIMO = 49.17;
+  let best=locs[0], bs=-1e9;
+  for(const l of locs){ const n = l.name.en.toLowerCase(); let sc=0;
+    if(/north of nanaimo/.test(n)) sc += lat>NANAIMO ? 3 : -3; else if(/south of nanaimo/.test(n)) sc += lat<=NANAIMO ? 3 : -3;
+    if(/\bnorth/.test(n) && !/nanaimo/.test(n)) sc += lat>cy ? 1 : -1;
+    if(/\bsouth/.test(n) && !/nanaimo/.test(n)) sc += lat<=cy ? 1 : -1;
+    if(/\beast/.test(n)) sc += lon>cx ? 1 : -1;
+    if(/\bwest/.test(n)) sc += lon<=cx ? 1 : -1;
+    if(/central/.test(n)) sc += 0.5 - Math.abs(lon-cx)/(Math.max(...xs)-Math.min(...xs)+1e-6)*2;
+    if(sc>bs){ bs=sc; best=l; } }
+  return best;
+}
+function activeWarnings(f, locName){
+  const out=[]; for(const l of (f.properties.warnings?.locations||[])){ if(locName && l.name?.en!==locName && (f.properties.regularForecast?.locations||[]).length>1) continue;
+    for(const e of (l.events||[])) if(/IN EFFECT|ISSUED|CONTINUED|UPDATED/i.test(e.status?.en||"")) out.push(e.name.en); }
+  return [...new Set(out)];
+}
+let marineTimer=null;
+function scheduleMarineChip(){ clearTimeout(marineTimer); marineTimer=setTimeout(updateMarineChip, 500); }
+function updateMarineChip(){
+  const chip = $("#marineChip"), c = map.getCenter(); const hit = marineAreaAt(c.lat, c.lng);
+  if(!hit){ chip.hidden = true; marineSel=null; return; }
+  const loc = pickSubArea(hit.f, c.lat, c.lng); const name = loc?.name?.en || hit.f.properties.area.value.en;
+  const warns = activeWarnings(hit.f, loc?.name?.en);
+  marineSel = {f:hit.f, loc, name, warns};
+  chip.className = "mchip" + (warns.length ? (/storm|hurricane/i.test(warns.join()) ? " storm" : " warn") : "");
+  chip.innerHTML = warns.length ? `⚠ <b>${warns[0]}</b><span>${name}</span>` : `📋 <b>Marine forecast</b><span>${name}</span>`;
+  chip.hidden = false;
+}
+function openMarine(){
+  if(!marineSel) return;
+  const {f, loc, name, warns} = marineSel, P = f.properties;
+  const issued = P.regularForecast?.issuedDatetimeLocal || P.regularForecast?.issuedDatetimeUTC || P.lastUpdated;
+  const block = l => `<div class="mloc"><b>${l.name.en}</b>${l.weatherCondition?.periodOfCoverage?`<small>${l.weatherCondition.periodOfCoverage.en}</small>`:""}
+     ${l.weatherCondition?.wind?`<p><span class="mk">Wind</span>${l.weatherCondition.wind.en}</p>`:""}
+     ${l.weatherCondition?.weatherVisibility?`<p><span class="mk">Weather</span>${l.weatherCondition.weatherVisibility.en}</p>`:""}</div>`;
+  const others = (P.regularForecast?.locations||[]).filter(l=>l!==loc);
+  const ext = (P.extendedForecast?.locations||[]).flatMap(l=>l.weatherCondition?.forecastPeriods||[]);
+  const sh = $("#sheet");
+  sh.innerHTML = sheetHead(P.area.value.en, "Environment Canada marine forecast") +
+    (warns.length? `<div class="mwarn">⚠ ${warns.join(" · ")} in effect</div>`:"") +
+    (loc? block(loc) : "") +
+    (ext.length? `<div class="sec-t">Extended forecast</div><div class="ev">${ext.map(p=>`<div><span><b>${p.name.en}</b></span><span style="text-align:right;max-width:72%">${p.value.en}</span></div>`).join("")}</div>`:"") +
+    (others.length? `<div class="sec-t">Other parts of this area</div>${others.map(block).join("")}`:"") +
+    `<div class="muted" style="padding-top:10px">Issued ${issued? new Date(issued).toString()!=="Invalid Date" ? fmtTime(new Date(issued),{weekday:"short",hour:"numeric",minute:"2-digit"}) : issued : "–"}. Full bulletin: weather.gc.ca/marine</div>`;
+  sh.classList.add("open"); sh.scrollTop=0;
+}
+
 /* ============ spot forecast sheet ============ */
 let tapMarker = null;
 function closeSheet(){ $("#sheet").classList.remove("open"); if(tapMarker){ map.removeLayer(tapMarker); tapMarker=null; } }
@@ -925,9 +1063,11 @@ function drawSpark(cv, d, sel){
 /* ============ wiring ============ */
 document.querySelectorAll("#layerSeg button").forEach(b=>b.onclick=()=>setLayer(b.dataset.l));
 document.querySelectorAll("#waterSeg button").forEach(b=>b.onclick=()=>setLayer(b.dataset.w));
+$("#marineChip").onclick = e=>{ e.stopPropagation(); openMarine(); };
 $("#btnMenu").onclick = e=>{ e.stopPropagation(); $("#menu").classList.toggle("open"); };
 document.addEventListener("click", e=>{ if(!$("#menu").contains(e.target) && e.target!==$("#btnMenu")) $("#menu").classList.remove("open"); });
 $("#tFlow").onchange = ()=>{ ls.set("tFlow",$("#tFlow").checked); clearFlow(); };
+$("#tCorr").onchange = ()=>{ ls.set("tCorr",$("#tCorr").checked); refreshCorrection(); };
 $("#tObs").onchange = ()=>{ ls.set("tObs",$("#tObs").checked); drawObs(); };
 $("#tTide").onchange = ()=>{ ls.set("tTide",$("#tTide").checked); drawTides(); refreshVisibleTides(); };
 $("#tCur").onchange = ()=>{ ls.set("tCur",$("#tCur").checked); drawCurrents(); refreshVisibleCurrents(); };
@@ -952,19 +1092,21 @@ $("#btnPlay").onclick = async ()=>{
 };
 $("#btnHome").onclick = ()=> map.setView(HOME.c, HOME.z);
 $("#btnNow").onclick = ()=> setTime(0, true);
-$("#btnRefresh").onclick = ()=>{ gridCache.clear(); for(const k in curCache) delete curCache[k]; for(const k in tideCache) delete tideCache[k]; centreTide=null; centreTideSt=null; centreFc=null; lastCentre=null; loadObs(); loadCurStations(); refreshModel(); loadCentreForecast(); };
+$("#btnRefresh").onclick = ()=>{ gridCache.clear(); for(const k in curCache) delete curCache[k]; for(const k in tideCache) delete tideCache[k]; centreTide=null; centreTideSt=null; centreFc=null; centreFcRaw=null; centreCorr=null; lastCentre=null; loadObs(); loadCurStations(); refreshModel(); loadCentreForecast(); };
 $("#btnLoc").onclick = ()=>{ if(!navigator.geolocation) return; navigator.geolocation.getCurrentPosition(p=>{ map.setView([p.coords.latitude,p.coords.longitude], Math.max(map.getZoom(),10)); L.circleMarker([p.coords.latitude,p.coords.longitude],{radius:7,color:"#fff",fillColor:"#2196f3",fillOpacity:1,weight:3,pane:"marks"}).addTo(map); }, ()=>{ $("#note").textContent="Location unavailable."; }, {enableHighAccuracy:true,timeout:10000}); };
 map.on("click", e=>{ if($("#sheet").classList.contains("open")) { closeSheet(); return; } openSpot(e.latlng.lat, e.latlng.lng); });
 
 // restore prefs
 if(ls.get("tFlow")===false) $("#tFlow").checked=false;
 if(ls.get("tObs")===false) $("#tObs").checked=false;
+if(ls.get("tCorr")===false) $("#tCorr").checked=false;
 if(ls.get("tCur")===false) $("#tCur").checked=false;
 if(ls.get("tTide")===false) $("#tTide").checked=false;
 if(ls.get("tSea")) { $("#tSea").checked=true; seamarks.addTo(map); }
 layoutCanvases(); drawBars(); updateSummary();
 setLayer(ls.get("layer")==="temp"||ls.get("layer")==="waves" ? ls.get("layer") : (ls.get("layer") || "wind"));
-loadCentreForecast(); loadObs(); loadCurStations();
+loadCentreForecast(); loadObs(); loadCurStations(); loadMarine();
+setInterval(loadMarine, 30*60e3);
 setInterval(loadObs, 10*60e3);
 document.addEventListener("visibilitychange", ()=>{ if(!document.hidden && obsData && Date.now()-obsData.at > 10*60e3) loadObs(); });
 if("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("sw.js").catch(()=>{});
