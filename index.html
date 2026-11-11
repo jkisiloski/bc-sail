@@ -68,6 +68,10 @@
   #tideRow .tv.lo{color:#9fb3c1}
   #tideRow .tlab{position:absolute;right:6px;bottom:3px;font:600 10px system-ui;color:#7fb6d3;background:rgba(20,27,33,.7);padding:0 3px;border-radius:3px}
   #sumTide{color:#9fd3ef!important}
+  #sumSea{color:#d7e4ec!important}
+  #sumSea .sv{font-weight:700}
+  #waterSeg{position:absolute;z-index:1000;top:calc(env(safe-area-inset-top) + 118px);left:10px;flex:none}
+  #waterSeg button{padding:8px 16px;font-size:13px}
   #sumTide .tst{color:var(--mut)}
   .tw{color:#4fc3f7;font-size:10px}
   .tide{display:flex;align-items:center;gap:2px;font:700 11px system-ui;color:#d9f1ff;background:rgba(15,40,58,.85);border:1px solid #2b6c8f;border-radius:7px;padding:1px 5px;white-space:nowrap;width:max-content}
@@ -110,6 +114,14 @@
   .leaflet-bottom{bottom:calc(env(safe-area-inset-bottom) + 192px)}
   .tapmark{width:14px;height:14px;border:3px solid #fff;border-radius:50%;background:#7cb342;box-shadow:0 0 0 2px #000}
   .flowcv{position:absolute;left:0;top:0;pointer-events:none}
+  #install{position:absolute;z-index:1500;left:10px;right:70px;bottom:calc(env(safe-area-inset-bottom) + 215px);display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px;box-shadow:0 6px 24px rgba(0,0,0,.5)}
+  #install[hidden]{display:none}
+  #install img{width:40px;height:40px;border-radius:10px;flex:none}
+  #install .itxt{flex:1;min-width:0}
+  #install .itxt b{display:block;font-size:14px}
+  #install .itxt span{display:block;font-size:12px;color:var(--mut)}
+  #btnInstall{background:linear-gradient(#6f8f55,#56743f);color:#fff;border:0;border-radius:10px;padding:10px 14px;font:700 14px system-ui;flex:none}
+  #install .ix{background:none;border:0;color:var(--mut);font-size:16px;padding:6px;flex:none}
   .basemap{filter:brightness(1.3) contrast(1.1)}
 </style>
 </head>
@@ -122,15 +134,15 @@
     <button data-l="wind" class="on">Wind</button>
     <button data-l="gust">Gusts</button>
     <button data-l="current">Current</button>
-    <button data-l="temp">Water</button>
+    <button data-l="water">Water</button>
   </div>
   <div class="sq" id="btnMenu" title="Layers">≡<div class="dots"><span class="dot" id="sMap"></span><span class="dot" id="sObs"></span><span class="dot" id="sCur"></span></div></div>
 </div>
 <div class="row2">
   <div class="pill" id="modelPill"><span class="ldot"></span><span id="modelName">HRDPS 2.5 km</span></div>
   <div id="scale"><div class="bar" id="scaleBar"></div><div class="lbl" id="scaleLbl"></div></div>
-  <img id="legendImg" alt="" hidden>
 </div>
+<div class="seg" id="waterSeg" hidden><button data-w="waves" class="on">Waves</button><button data-w="temp">Temp</button></div>
 <div id="menu">
   <label><input type="checkbox" id="tFlow" checked>Animated flow lines</label>
   <label><input type="checkbox" id="tObs" checked>Observed wind (stations)</label>
@@ -150,7 +162,7 @@
   <div class="grab"></div>
   <div class="tl-top">
     <button id="btnPlay" aria-label="Play">▶</button>
-    <div class="sum"><b id="sumMain">—</b><small id="sumSub">Wind at map centre</small><small id="sumTide"></small></div>
+    <div class="sum"><b id="sumMain">—</b><small id="sumSub">Wind at map centre</small><small id="sumSea" hidden></small><small id="sumTide"></small></div>
     <button id="btnNow" class="now">Now</button>
   </div>
   <div class="strip2"><div id="bars"></div><input type="range" id="slider" min="0" max="48" value="0" step="1"></div>
@@ -159,6 +171,12 @@
   <div id="note"></div>
 </div>
 
+<div id="install" hidden>
+  <img src="icon-192.png" alt="">
+  <div class="itxt"><b>Install BC Sail</b><span id="installMsg">Full-screen app on your home screen, works with patchy signal.</span></div>
+  <button id="btnInstall">Install</button>
+  <button id="btnInstallX" class="ix" aria-label="Not now">✕</button>
+</div>
 <div id="sheet"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -174,7 +192,6 @@ const KMH2KT = 1/1.852, MS2KT = 1.943844;
 const SALISH = {s:47.0,n:51.0,w:-126.4,e:-122.0}; // approx CIOPS-SalishSea footprint
 const COAST = {s:47.0,n:56.0,w:-136.0,e:-121.5};
 const HOURS = 48;
-const TEMP = {salish:"CIOPS-SalishSea_500m_SeaWaterPotentialTemp_0.5m", west:"CIOPS-West_2km_SeaWaterPotentialTemp_0.5m", style:"SEA_TEMPSURF-DEFAULT"};
 
 /* ============ small utils ============ */
 const $ = s => document.querySelector(s);
@@ -215,7 +232,16 @@ function ramp(stops, v){
 }
 const WIND_STOPS = [[0,[70,90,170]],[5,[50,140,200]],[9,[60,170,120]],[13,[140,195,60]],[17,[230,200,40]],[22,[240,140,30]],[27,[220,70,40]],[33,[190,40,90]],[42,[130,40,150]]];
 const CUR_STOPS  = [[0,[40,70,130]],[0.5,[40,120,200]],[1,[40,180,190]],[2,[90,200,110]],[3,[220,210,60]],[4.5,[240,130,40]],[6,[220,50,60]],[8,[170,40,140]]];
+const WAVE_STOPS = [[0,[40,60,125]],[0.4,[40,115,190]],[0.8,[45,165,175]],[1.2,[100,195,100]],[1.8,[225,205,60]],[2.5,[240,135,40]],[3.5,[215,55,60]],[5,[160,40,140]]];
+const TEMP_STOPS = [[4,[70,45,150]],[6,[50,95,195]],[8,[40,160,205]],[10,[65,190,145]],[12,[185,205,70]],[14,[240,150,40]],[16,[220,65,50]],[20,[170,30,60]]];
+const STYLES = {
+  wind:   {stops:WIND_STOPS, min:0, max:40, alpha:85,  k:0.16, div:170, lw:1.3, unit:"kt", particles:true},
+  current:{stops:CUR_STOPS,  min:0, max:6,  alpha:150, k:2.2,  div:140, lw:1.6, unit:"kt", particles:true, minMag:0.04},
+  waves:  {stops:WAVE_STOPS, min:0, max:4,  alpha:165, k:0.55, div:230, lw:1.9, unit:"m",  particles:true, minMag:0.05},
+  temp:   {stops:TEMP_STOPS, min:4, max:16, alpha:175, unit:"°C", particles:false}
+};
 const rgb = c => `rgb(${c[0]},${c[1]},${c[2]})`;
+const waveColor = m => rgb(ramp(WAVE_STOPS, m||0));
 function windColor(kt){ return rgb(ramp(WIND_STOPS, kt||0)); }
 function arrowSVG(deg, color="#fff", size=22){
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" style="transform:rotate(${deg}deg)"><path d="M12 2 L18 14 L13.2 12.6 L13.2 22 L10.8 22 L10.8 12.6 L6 14 Z" fill="${color}" stroke="#000" stroke-width="1"/></svg>`;
@@ -244,7 +270,10 @@ const GRIDS = {
   wind:   {a:"HRDPS-WEonG_2.5km_WindSpeed", b:"HRDPS-WEonG_2.5km_WindDir", kind:"spd-dir", name:"HRDPS 2.5 km", box:COAST},
   gust:   {a:"HRDPS-WEonG_2.5km_WindGust"},
   curS:   {a:"CIOPS-SalishSea_500m_SeaWaterVelocityX_0.5m", b:"CIOPS-SalishSea_500m_SeaWaterVelocityY_0.5m", kind:"uv", name:"CIOPS Salish Sea 500 m", box:SALISH},
-  curW:   {a:"CIOPS-West_2km_SeaWaterVelocityX_0.5m", b:"CIOPS-West_2km_SeaWaterVelocityY_0.5m", kind:"uv", name:"CIOPS West 2 km", box:COAST}
+  curW:   {a:"CIOPS-West_2km_SeaWaterVelocityX_0.5m", b:"CIOPS-West_2km_SeaWaterVelocityY_0.5m", kind:"uv", name:"CIOPS West 2 km", box:COAST},
+  waves:  {a:"RDWPS_2.5km_SignificantWaveHeight", b:"RDWPS_2.5km_PeakWaveDir", c:"RDWPS_2.5km_PeakWavePeriod", kind:"waves", name:"RDWPS 2.5 km waves", box:COAST},
+  tempS:  {a:"CIOPS-SalishSea_500m_SeaWaterPotentialTemp_0.5m", kind:"temp", name:"CIOPS Salish Sea 500 m", box:SALISH},
+  tempW:  {a:"CIOPS-West_2km_SeaWaterPotentialTemp_0.5m", kind:"temp", name:"CIOPS West 2 km", box:COAST}
 };
 const gridCache = new Map(); // key -> Promise<field|null>
 async function wcs(cov, box, time){
@@ -265,16 +294,22 @@ function currentModel(){
   const c = map.getCenter();
   return (map.getZoom()>=9 && c.lat>SALISH.s+0.3 && c.lat<SALISH.n-0.3 && c.lng>SALISH.w+0.3 && c.lng<SALISH.e-0.3) ? "curS" : "curW";
 }
-function gridRequest(layer, time){
-  const isWind = layer==="wind"||layer==="gust";
-  const m = isWind ? "wind" : currentModel(); const g = GRIDS[m];
-  const step = m==="curS" ? 0.25 : 1;
-  const box = clipBox(roundBox(viewBox(0.5), step), g.box);
-  return {key:`${m}${layer==="gust"?"g":""}|${+time}|${box.s},${box.n},${box.w},${box.e}`, box, g, model:m, gust: layer==="gust"};
+function modelFor(layer){
+  if(layer==="wind"||layer==="gust") return {m:"wind", mk: layer==="gust"?"windg":"wind"};
+  if(layer==="waves") return {m:"waves", mk:"waves"};
+  const cm = currentModel();
+  if(layer==="temp"){ const m = cm==="curS"?"tempS":"tempW"; return {m, mk:m}; }
+  return {m:cm, mk:cm};
 }
-function findCached(layer, time){ // any cached current grid for this hour whose box covers view
-  const m = (layer==="wind") ? "wind" : layer==="gust" ? "windg" : currentModel(); const vb = viewBox(0);
-  for(const [k,p] of gridCache){ const [mm,tt,bb] = k.split("|"); if(mm===m && +tt===+time && bb){ const [s,n,w,e]=bb.split(",").map(Number); if(boxContains({s,n,w,e},vb)) return {key:k}; } }
+function gridRequest(layer, time){
+  const {m, mk} = modelFor(layer); const g = GRIDS[m];
+  const step = (m==="curS"||m==="tempS") ? 0.25 : 1;
+  const box = clipBox(roundBox(viewBox(0.5), step), g.box);
+  return {key:`${mk}|${+time}|${box.s},${box.n},${box.w},${box.e}`, box, g, mk, gust: layer==="gust", layer};
+}
+function findCached(layer, time){ // any cached grid for this layer+hour whose box covers the view
+  const {mk} = modelFor(layer); const vb = viewBox(0);
+  for(const [k] of gridCache){ const [mm,tt,bb] = k.split("|"); if(mm===mk && +tt===+time && bb){ const [s,n,w,e]=bb.split(",").map(Number); if(boxContains({s,n,w,e},vb)) return {key:k}; } }
   return null;
 }
 function loadField(layer, time){
@@ -284,28 +319,43 @@ function loadField(layer, time){
   if(gridCache.has(key)) return gridCache.get(key);
   const p = (async()=>{
     const {g, box} = req;
-    const jobs = [wcs(g.a, box, time), wcs(g.b, box, time)];
-    if(req.gust) jobs.push(wcs(GRIDS.gust.a, box, time));
-    const [A,B,G] = await Promise.all(jobs);
+    const jobs = [wcs(g.a, box, time)];
+    if(g.b) jobs.push(wcs(g.b, box, time)); else jobs.push(null);
+    if(g.c) jobs.push(wcs(g.c, box, time)); else jobs.push(null);
+    if(req.gust) jobs.push(wcs(GRIDS.gust.a, box, time)); else jobs.push(null);
+    const [A,B,C,G] = await Promise.all(jobs);
     const n = A.w*A.h, u = new Float32Array(n), v = new Float32Array(n), mag = new Float32Array(n);
+    let per = null;
     if(g.kind==="spd-dir"){
       for(let i=0;i<n;i++){ const s=A.data[i], d=B.data[i]*Math.PI/180; u[i]=-s*Math.sin(d); v[i]=-s*Math.cos(d); mag[i]=(G?G.data[i]:s)*MS2KT; }
-    } else {
-      for(let i=0;i<n;i++){ let x=A.data[i], y=B.data[i]; if(!isFinite(x)||Math.abs(x)>50) x=0; if(!isFinite(y)||Math.abs(y)>50) y=0; u[i]=x; v[i]=y; mag[i]=Math.hypot(x,y)*MS2KT; }
+    } else if(g.kind==="uv"){
+      for(let i=0;i<n;i++){ let x=A.data[i], y=B.data[i]; if(!isFinite(x)||Math.abs(x)>50) x=0; if(!isFinite(y)||Math.abs(y)>50) y=0;
+        if(x===0&&y===0){ u[i]=v[i]=mag[i]=NaN; continue; } u[i]=x; v[i]=y; mag[i]=Math.hypot(x,y)*MS2KT; }
+    } else if(g.kind==="waves"){
+      per = new Float32Array(n);
+      for(let i=0;i<n;i++){ const hs=A.data[i], d=B.data[i]*Math.PI/180, tp=C.data[i];
+        if(!(hs>0.01) || !isFinite(hs) || hs>40){ u[i]=v[i]=mag[i]=per[i]=NaN; continue; }
+        const sp = 1.5 + Math.min(tp||0,16)*0.35; u[i]=-sp*Math.sin(d); v[i]=-sp*Math.cos(d); mag[i]=hs; per[i]=tp; }
+    } else if(g.kind==="temp"){
+      for(let i=0;i<n;i++){ const k=A.data[i]; if(!(k>250&&k<320)){ u[i]=v[i]=mag[i]=NaN; continue; } u[i]=v[i]=0; mag[i]=k-273.15; }
     }
-    return {w:A.w, h:A.h, west:A.west, east:A.east, south:A.south, north:A.north, u, v, mag, isCurrent:g.kind==="uv", name:g.name};
+    const type = g.kind==="spd-dir" ? "wind" : g.kind==="uv" ? "current" : g.kind;
+    return {w:A.w, h:A.h, west:A.west, east:A.east, south:A.south, north:A.north, u, v, mag, per, type, mk:req.mk, name:g.name};
   })().catch(e=>{ gridCache.delete(key); throw e; });
   gridCache.set(key, p);
   if(gridCache.size>40){ const k0 = gridCache.keys().next().value; gridCache.delete(k0); }
   return p;
 }
-function viewInsideField(){ const v=viewBox(0); return field && v.s>=field.south && v.n<=field.north && v.w>=field.west && v.e<=field.east && (activeKey!=="current" || field.name===GRIDS[currentModel()].name); }
+function viewInsideField(){ const v=viewBox(0); return field && v.s>=field.south && v.n<=field.north && v.w>=field.west && v.e<=field.east && field.mk===modelFor(activeKey).mk; }
 function sampleField(f, lat, lon){
   const fx = (lon - f.west)/(f.east - f.west)*f.w - 0.5, fy = (f.north - lat)/(f.north - f.south)*f.h - 0.5;
   if(fx<0||fy<0||fx>=f.w-1||fy>=f.h-1) return null;
   const x0=fx|0, y0=fy|0, ax=fx-x0, ay=fy-y0, i=y0*f.w+x0;
-  const bl=(a)=> (a[i]*(1-ax)+a[i+1]*ax)*(1-ay) + (a[i+f.w]*(1-ax)+a[i+f.w+1]*ax)*ay;
-  return [bl(f.u), bl(f.v), bl(f.mag)];
+  const ids = [i, i+1, i+f.w, i+f.w+1], ws = [(1-ax)*(1-ay), ax*(1-ay), (1-ax)*ay, ax*ay];
+  let sw=0, su=0, sv=0, sm=0, sp=0;
+  for(let j=0;j<4;j++){ const m = f.mag[ids[j]]; if(m!==m) continue; const wj=ws[j]; sw+=wj; su+=wj*f.u[ids[j]]; sv+=wj*f.v[ids[j]]; sm+=wj*m; if(f.per) sp+=wj*f.per[ids[j]]; }
+  if(sw<0.35) return null;
+  return [su/sw, sv/sw, sm/sw, f.per? sp/sw : null];
 }
 
 /* ============ flow renderer (animated streaks) ============ */
@@ -330,12 +380,12 @@ function layoutCanvases(){
 function renderField(){
   fctx.clearRect(0,0,W,H);
   if(!field) return;
-  const step = 5, stops = field.isCurrent ? CUR_STOPS : WIND_STOPS;
+  const st = STYLES[field.type], step = 5, stops = st.stops;
   const img = fctx.createImageData(Math.ceil(W/step), Math.ceil(H/step)); const d = img.data;
   let k=0;
   for(let y=0;y<H;y+=step){ const lat = latOfY[Math.min(H,y+2)];
     for(let x=0;x<W;x+=step){ const s = sampleField(field, lat, lonW+(x+2)*lonPerPx);
-      if(s && !(field.isCurrent && s[2]<0.03)){ const c = ramp(stops, s[2]); d[k]=c[0]; d[k+1]=c[1]; d[k+2]=c[2]; d[k+3]= field.isCurrent?150:85; }
+      if(s && !(st.minMag && s[2]<st.minMag*0.7)){ const c = ramp(stops, s[2]); d[k]=c[0]; d[k+1]=c[1]; d[k+2]=c[2]; d[k+3]= st.alpha; }
       else d[k+3]=0;
       k+=4; } }
   // draw scaled up smoothly
@@ -343,7 +393,9 @@ function renderField(){
   fctx.imageSmoothingEnabled = true; fctx.drawImage(tmp, 0, 0, img.width*step, img.height*step);
 }
 function seedParticles(){
-  const n = Math.min(3200, Math.round(W*H/ (field&&field.isCurrent?140:170)));
+  const st = field ? STYLES[field.type] : null;
+  if(!st || !st.particles){ particles = []; return; }
+  const n = Math.min(3200, Math.round(W*H/st.div));
   particles = new Array(n); for(let i=0;i<n;i++) particles[i] = newParticle(true);
 }
 function newParticle(rand){ return {x:Math.random()*W, y:Math.random()*H, age: rand?Math.floor(Math.random()*80):0, max: 50+Math.floor(Math.random()*60)}; }
@@ -355,22 +407,22 @@ function frame(ts){
   if(ts-lastFrame < 30) return; lastFrame = ts;
   pctx.globalCompositeOperation = "destination-in"; pctx.fillStyle = "rgba(0,0,0,0.90)"; pctx.fillRect(0,0,W,H);
   pctx.globalCompositeOperation = "source-over";
-  const cur = field.isCurrent, stops = cur?CUR_STOPS:WIND_STOPS, maxV = cur?6:40;
-  const k = cur ? 2.2 : 0.16;
+  const st = STYLES[field.type]; if(!st.particles) return;
+  const stops = st.stops, maxV = st.max, k = st.k, minMag = st.minMag||0;
   const paths = Array.from({length:NB},()=>new Path2D());
   for(let i=0;i<particles.length;i++){
     const p = particles[i];
     if(p.age++ > p.max){ particles[i] = newParticle(false); continue; }
     const yi = p.y|0; if(yi<0||yi>H){ particles[i]=newParticle(false); continue; }
     const s = sampleField(field, latOfY[yi], lonW + p.x*lonPerPx);
-    if(!s || (cur && s[2]<0.04)){ particles[i]=newParticle(false); continue; }
+    if(!s || s[2]<minMag){ particles[i]=newParticle(false); continue; }
     const nx = p.x + s[0]*k, ny = p.y - s[1]*k;
     const b = Math.max(0, Math.min(NB-1, Math.floor(s[2]/maxV*NB))) || 0;
     paths[b].moveTo(p.x,p.y); paths[b].lineTo(nx,ny);
     p.x=nx; p.y=ny;
     if(nx<0||ny<0||nx>W||ny>H) particles[i]=newParticle(false);
   }
-  pctx.lineWidth = cur?1.6:1.3; pctx.lineCap="round";
+  pctx.lineWidth = st.lw; pctx.lineCap="round";
   for(let b=0;b<NB;b++){ const c = ramp(stops, (b+0.5)/NB*maxV); pctx.strokeStyle = `rgba(${Math.min(255,c[0]+60)},${Math.min(255,c[1]+60)},${Math.min(255,c[2]+60)},0.92)`; pctx.stroke(paths[b]); }
 }
 requestAnimationFrame(frame);
@@ -379,37 +431,23 @@ map.on("movestart zoomstart", ()=>{ moving=true; flowCv.style.opacity=0; });
 map.on("zoomstart", ()=>{ fieldCv.style.opacity=0; });
 map.on("moveend", ()=>{
   moving=false; layoutCanvases(); clearFlow(); flowCv.style.opacity=1; fieldCv.style.opacity=1;
-  if(activeKey==="temp" || !field || !viewInsideField()) refreshModel(); else { renderField(); seedParticles(); }
+  if(!field || !viewInsideField()) refreshModel(); else { renderField(); seedParticles(); updateSummary(); }
   refreshVisibleCurrents(); scheduleCentreForecast(); drawTides(); refreshVisibleTides(); clearTimeout(window._ctT); window._ctT=setTimeout(loadCentreTide,700);
 });
 map.on("resize", ()=>{ layoutCanvases(); renderField(); seedParticles(); });
 
 /* ============ active layer ============ */
-let activeKey = "wind", tempWms = null, loadSeq = 0;
-function setScale(stops, max, unit){
-  const g = []; for(let i=0;i<=10;i++){ const v=i/10*max; g.push(`${rgb(ramp(stops,v))} ${i*10}%`); }
+let activeKey = "wind", loadSeq = 0;
+function setScale(st){
+  const g = []; for(let i=0;i<=10;i++){ const v=st.min+i/10*(st.max-st.min); g.push(`${rgb(ramp(st.stops,v))} ${i*10}%`); }
   $("#scaleBar").style.background = `linear-gradient(90deg,${g.join(",")})`;
-  $("#scaleLbl").innerHTML = [0,max/4,max/2,3*max/4,max].map(v=>`<span>${+v.toFixed(1)}</span>`).join("") + `<span>${unit}</span>`;
+  $("#scaleLbl").innerHTML = [0,.25,.5,.75,1].map(f=>`<span>${+(st.min+f*(st.max-st.min)).toFixed(1)}</span>`).join("") + `<span>${st.unit}</span>`;
 }
 async function refreshModel(){
   const seq = ++loadSeq, key = activeKey, time = curTime();
-  if(key==="temp"){
-    field=null; clearFlow(); renderField(); $("#scale").hidden=true;
-    const name = (inSalishView() && map.getZoom()>=8) ? TEMP.salish : TEMP.west;
-    $("#modelName").textContent = name.includes("Salish") ? "CIOPS Salish 500 m" : "CIOPS West 2 km";
-    if(!tempWms || tempWms.options.layers!==name){
-      if(tempWms) map.removeLayer(tempWms);
-      tempWms = L.tileLayer.wms(GEOMET,{layers:name, styles:TEMP.style, format:"image/png", transparent:true, version:"1.3.0", tileSize:512, opacity:.7, pane:"model", time:isoZ(time)}).addTo(map);
-      tempWms.on("tileload",()=>setDot("#sMap","ok","Water temperature map loaded"));
-      tempWms.on("tileerror",()=>setDot("#sMap","stale","Some temperature tiles failed"));
-      $("#legendImg").src = `${GEOMET}?service=WMS&version=1.3.0&request=GetLegendGraphic&format=image/png&layer=${name}&style=${TEMP.style}&sld_version=1.1.0&lang=en`;
-      $("#legendImg").onload=()=>{ $("#legendImg").hidden = activeKey!=="temp"; };
-    } else tempWms.setParams({time:isoZ(time)});
-    return;
-  }
-  if(tempWms){ map.removeLayer(tempWms); tempWms=null; } $("#legendImg").hidden=true; $("#scale").hidden=false;
-  const isCur = key==="current";
-  setScale(isCur?CUR_STOPS:WIND_STOPS, isCur?6:40, "kt");
+  setScale(STYLES[key==="gust"?"wind":key]);
+  $("#waterSeg").hidden = !(key==="waves"||key==="temp");
+  document.querySelectorAll("#waterSeg button").forEach(b=>b.classList.toggle("on", b.dataset.w===key));
   setDot("#sMap","load","Loading forecast grid…");
   try{
     const f = await loadField(key, time);
@@ -418,10 +456,11 @@ async function refreshModel(){
     $("#note").textContent = "";
     layoutCanvases(); renderField(); seedParticles(); clearFlow(); running = true;
     setDot("#sMap","ok", `${f.name} grid · ${fmtTime(time,{weekday:"short",hour:"numeric"})}`);
+    updateSummary();
     prefetch(key, time);
   }catch(e){
     if(seq!==loadSeq) return;
-    field=null; renderField(); clearFlow();
+    field=null; renderField(); clearFlow(); updateSummary();
     const beyond = /no data/.test(e.message);
     $("#note").textContent = beyond ? "No model data for this hour (past the end of the forecast)." : "Couldn't load the forecast grid – tap ⟳ to retry.";
     setDot("#sMap", beyond?"stale":"bad", beyond?"No model data for this hour":"Forecast grid failed");
@@ -430,8 +469,11 @@ async function refreshModel(){
 function prefetch(key, time){ for(const h of [1]){ const t = new Date(+time+h*3600e3); if(+t <= +t0+HOURS*3600e3) loadField(key, t).catch(()=>{}); } }
 function inSalishView(){ const c = map.getCenter(); return c.lat>SALISH.s && c.lat<SALISH.n && c.lng>SALISH.w && c.lng<SALISH.e; }
 function setLayer(key){
+  if(key==="water") key = ls.get("waterSub") || "waves";
+  if(key==="waves"||key==="temp") ls.set("waterSub", key);
   activeKey = key; ls.set("layer",key);
-  document.querySelectorAll("#layerSeg button").forEach(b=>b.classList.toggle("on", b.dataset.l===key));
+  const top = (key==="waves"||key==="temp") ? "water" : key;
+  document.querySelectorAll("#layerSeg button").forEach(b=>b.classList.toggle("on", b.dataset.l===top));
   refreshModel();
 }
 
@@ -467,6 +509,14 @@ function updateSummary(){
   let rng = "";
   if(centreFc){ const ws = centreFc.filter(Boolean).map(x=>x.w); if(ws.length) rng = ` · ${Math.round(Math.min(...ws))}–${Math.round(Math.max(...ws))} kn next 48 h`; }
   $("#sumSub").textContent = `${fmtTime(d,{weekday:"short",hour:"numeric"})}${tIdx===0?" (now)":" · +"+tIdx+" h"}${rng}`;
+  const se = $("#sumSea");
+  if(field && (field.type==="waves"||field.type==="temp")){ const c = map.getCenter(); const v = sampleField(field, c.lat, c.lng);
+    if(!v) se.innerHTML = `<span class="tst">No ${field.type==="waves"?"wave":"water"} data at the crosshair (land?)</span>`;
+    else if(field.type==="waves"){ const from = (Math.atan2(-v[0],-v[1])*180/Math.PI+360)%360;
+      se.innerHTML = `〰 Waves <span class="sv" style="color:${waveColor(v[2])}">${v[2].toFixed(1)} m</span> · ${v[3]!=null?v[3].toFixed(0)+" s":""} from ${compass(from)}`; }
+    else se.innerHTML = `🌡 Water <span class="sv" style="color:${rgb(ramp(TEMP_STOPS,v[2]))}">${v[2].toFixed(1)} °C</span> at surface`;
+    se.hidden = false;
+  } else { se.hidden = true; se.textContent=""; }
   const te = $("#sumTide");
   if(typeof centreTide!=="undefined" && centreTide){ const a = tideAt(centreTide,+d), nx = nextTideEvent(centreTide,+d);
     te.innerHTML = a ? `<span class="tw">${a.rising?"▲":"▼"}</span> Tide ${a.h.toFixed(1)} m ${a.rising?"rising":"falling"}${nx?` · ${nx.hi?"high":"low"} ${nx.v.toFixed(1)} m at ${fmtTime(new Date(nx.t),{hour:"numeric",minute:"2-digit"})}`:""} <span class="tst">${centreTideSt.name}</span>` : "";
@@ -711,8 +761,11 @@ async function oceanAt(lat, lon, time){
     const [x,y,k] = await Promise.all([gfi(`${pfx}_SeaWaterVelocityX_0.5m`,lat,lon,time).catch(()=>null), gfi(`${pfx}_SeaWaterVelocityY_0.5m`,lat,lon,time).catch(()=>null), gfi(`${pfx}_SeaWaterPotentialTemp_0.5m`,lat,lon,time).catch(()=>null)]);
     return {x,y,k,model:pfx.split("_").slice(0,2).join(" ")};
   };
+  const wavesP = Promise.all(["RDWPS_2.5km_SignificantWaveHeight","RDWPS_2.5km_PeakWavePeriod","RDWPS_2.5km_PeakWaveDir"].map(l=>gfi(l,lat,lon,time).catch(()=>null)));
   let r = inS ? await tryModel("CIOPS-SalishSea_500m") : null;
-  if(!r || (r.x==null && r.k==null)) r = await tryModel("CIOPS-West_2km");
+  if(!r || (r.x==null && r.k==null) || (r.k===0)) r = await tryModel("CIOPS-West_2km");
+  if(r && r.k===0) r.k = null; if(r && r.x===0 && r.y===0) r.x = r.y = null;
+  const [hs,tp,wd] = await wavesP; r.hs = (hs>0.01 && hs<30) ? hs : null; r.tp = (r.hs!=null && tp>0 && tp<30) ? tp : null; r.wd = (r.hs!=null && wd>=0 && wd<=360) ? wd : null;
   return r;
 }
 async function openSpot(lat, lon, {obs}={}){
@@ -722,36 +775,40 @@ async function openSpot(lat, lon, {obs}={}){
   const title = obs ? obs.name : `${lat.toFixed(3)}°, ${lon.toFixed(3)}°`;
   sh.innerHTML = sheetHead(title, obs?`Observed ${fmtTime(new Date(obs.t),{weekday:"short",hour:"numeric",minute:"2-digit"})}`:"Spot forecast") +
     (obs? `<div class="kv"><div><span>Sustained (10 min)</span><b style="color:${windColor(obs.spd)}">${Math.round(obs.spd)} kt</b><span>${obs.dir!=null?compass(obs.dir)+" "+Math.round(obs.dir)+"°":""}</span></div><div><span>Gust</span><b>${obs.gust!=null?Math.round(obs.gust)+" kt":"–"}</b><span>${obs.air!=null?"Air "+obs.air.toFixed(1)+"°C":""}${obs.sst!=null?" · Sea "+obs.sst.toFixed(1)+"°C":""}${obs.wave!=null?" · Hs "+obs.wave.toFixed(1)+" m":""}</span></div></div>`:"") +
-    `<div class="sec-t">Wind forecast · ECCC HRDPS/GEM (kt)</div><div id="spWind" class="muted">Loading…</div>
-     <div class="sec-t">Water at selected time · CIOPS model</div><div id="spOcean" class="muted">Loading…</div>`;
+    `<div class="sec-t">Wind (kt, ECCC HRDPS/GEM) · waves (Open-Meteo marine)</div><div id="spWind" class="muted">Loading…</div>
+     <div class="sec-t">Water at selected time · CIOPS &amp; RDWPS models</div><div id="spOcean" class="muted">Loading…</div>`;
   sh.classList.add("open"); sh.scrollTop=0;
   // wind strip
   (async()=>{
     const key = `om:${lat.toFixed(2)},${lon.toFixed(2)}`;
     let j = null;
     try{
-      j = await fetchJSON(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=wind_speed_10m,wind_gusts_10m,wind_direction_10m&models=gem_seamless&wind_speed_unit=kn&timezone=GMT&forecast_days=4&timeformat=unixtime`,{timeout:12000});
+      const [jw, jm] = await Promise.all([
+        fetchJSON(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=wind_speed_10m,wind_gusts_10m,wind_direction_10m&models=gem_seamless&wind_speed_unit=kn&timezone=GMT&forecast_days=4&timeformat=unixtime`,{timeout:12000}),
+        fetchJSON(`https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&hourly=wave_height,wave_period&timezone=GMT&forecast_days=4&timeformat=unixtime`,{timeout:12000,tries:2}).catch(()=>null)]);
+      j = jw; j.marine = jm?.hourly || null;
       ls.set(key,{at:Date.now(), j});
     }catch(e){ const c = ls.get(key); if(c){ j=c.j; } }
     const el = $("#spWind"); if(!el) return;
     if(!j){ el.className="err"; el.textContent="Couldn't load the wind forecast. Check signal and tap the spot again."; return; }
-    el.className="strip"; el.innerHTML = windStrip(j.hourly);
+    el.className="strip"; el.innerHTML = windStrip(j.hourly, j.marine);
     const nowCell = el.querySelector("td.now"); if(nowCell) el.scrollLeft = Math.max(0, nowCell.offsetLeft-60);
   })();
   // ocean
   (async()=>{
     const r = await oceanAt(lat, lon, curTime()).catch(()=>null);
     const el = $("#spOcean"); if(!el) return;
-    if(!r || (r.x==null && r.k==null)){ el.textContent="No model water data here (on land or outside model)."; return; }
+    if(!r || (r.x==null && r.k==null && r.hs==null)){ el.textContent="No model water data here (on land or outside model)."; return; }
     const spd = (r.x!=null&&r.y!=null) ? Math.hypot(r.x,r.y)*MS2KT : null;
     const dir = (r.x!=null&&r.y!=null) ? (Math.atan2(r.x,r.y)*180/Math.PI+360)%360 : null;
-    el.className="kv"; el.innerHTML = `<div><span>Surface current · ${fmtTime(curTime(),{weekday:"short",hour:"numeric"})}</span><b>${spd!=null?spd.toFixed(1)+" kt":"–"}</b><span>${dir!=null?"toward "+compass(dir)+" "+Math.round(dir)+"°":""}</span></div><div><span>Water temp (0.5 m)</span><b>${r.k!=null?(r.k-273.15).toFixed(1)+" °C":"–"}</b><span>${r.model}</span></div>`;
+    el.className="kv"; el.innerHTML = `<div><span>Surface current · ${fmtTime(curTime(),{weekday:"short",hour:"numeric"})}</span><b>${spd!=null?spd.toFixed(1)+" kt":"–"}</b><span>${dir!=null?"toward "+compass(dir)+" "+Math.round(dir)+"°":""}</span></div><div><span>Water temp (0.5 m)</span><b>${r.k!=null?(r.k-273.15).toFixed(1)+" °C":"–"}</b><span>${r.model}</span></div><div><span>Waves (sig. height)</span><b style="color:${r.hs!=null?waveColor(r.hs):'inherit'}">${r.hs!=null?r.hs.toFixed(1)+" m":"–"}</b><span>${r.wd!=null?"from "+compass(r.wd)+" "+Math.round(r.wd)+"°":""}</span></div><div><span>Wave period (peak)</span><b>${r.tp!=null?r.tp.toFixed(1)+" s":"–"}</b><span>RDWPS 2.5 km</span></div>`;
   })();
 }
-function windStrip(h){
+function windStrip(h, mh){
+  const mIdx = {}; if(mh) mh.time.forEach((t,i)=>mIdx[t]=i);
   const now = Date.now()/1000 - 1800;
   const idx = h.time.map((t,i)=>i).filter(i=>h.time[i] >= now-3600*2);
-  let days="<tr class='day'><th class='rowlab'></th>", hrs="<tr><th class='rowlab'>Local</th>", dir="<tr><td class='rowlab'>Dir</td>", w="<tr><td class='rowlab'>Wind</td>", g="<tr><td class='rowlab'>Gust</td>";
+  let days="<tr class='day'><th class='rowlab'></th>", hrs="<tr><th class='rowlab'>Local</th>", dir="<tr><td class='rowlab'>Dir</td>", w="<tr><td class='rowlab'>Wind</td>", g="<tr><td class='rowlab'>Gust</td>", wv="<tr><td class='rowlab'>Waves m</td>", wp="<tr><td class='rowlab'>Period s</td>";
   let lastDay=null, dayCells=[];
   const sel = +curTime()/1000;
   idx.forEach(i=>{
@@ -764,9 +821,12 @@ function windStrip(h){
     dir += `<td class="${cls}">${wd!=null?arrowSVG((wd+180)%360,"#cfe3f3",16):""}</td>`;
     w += `<td class="${cls}" style="background:${windColor(ws)};color:#fff;font-weight:700;text-shadow:0 0 2px #000">${ws!=null?Math.round(ws):"–"}</td>`;
     g += `<td class="${cls}" style="color:${windColor(gs)};font-weight:700">${gs!=null?Math.round(gs):"–"}</td>`;
+    const mi = mIdx[h.time[i]], hv = mi!=null ? mh.wave_height[mi] : null, pv = mi!=null ? mh.wave_period[mi] : null;
+    wv += `<td class="${cls}" style="color:${hv!=null?waveColor(hv):'inherit'};font-weight:700">${hv!=null?hv.toFixed(1):"–"}</td>`;
+    wp += `<td class="${cls}" style="color:#9fb3c1">${pv!=null?Math.round(pv):"–"}</td>`;
   });
   dayCells.forEach(([l,s],k)=> days += `<th colspan="${s}" class="${k?'d':''}" ${k?'':'style="text-align:right;padding-right:6px"'}>${l}</th>`);
-  return `<table>${days}</tr>${hrs}</tr>${dir}</tr>${w}</tr>${g}</tr></table>`;
+  return `<table>${days}</tr>${hrs}</tr>${dir}</tr>${w}</tr>${g}</tr>${mh?wv+"</tr>"+wp+"</tr>":""}</table>`;
 }
 
 async function openStation(s){
@@ -812,6 +872,7 @@ function drawSpark(cv, d, sel){
 
 /* ============ wiring ============ */
 document.querySelectorAll("#layerSeg button").forEach(b=>b.onclick=()=>setLayer(b.dataset.l));
+document.querySelectorAll("#waterSeg button").forEach(b=>b.onclick=()=>setLayer(b.dataset.w));
 $("#btnMenu").onclick = e=>{ e.stopPropagation(); $("#menu").classList.toggle("open"); };
 document.addEventListener("click", e=>{ if(!$("#menu").contains(e.target) && e.target!==$("#btnMenu")) $("#menu").classList.remove("open"); });
 $("#tFlow").onchange = ()=>{ ls.set("tFlow",$("#tFlow").checked); clearFlow(); };
@@ -850,11 +911,40 @@ if(ls.get("tCur")===false) $("#tCur").checked=false;
 if(ls.get("tTide")===false) $("#tTide").checked=false;
 if(ls.get("tSea")) { $("#tSea").checked=true; seamarks.addTo(map); }
 layoutCanvases(); drawBars(); updateSummary();
-setLayer(ls.get("layer") || "wind");
+setLayer(ls.get("layer")==="temp"||ls.get("layer")==="waves" ? ls.get("layer") : (ls.get("layer") || "wind"));
 loadCentreForecast(); loadObs(); loadCurStations();
 setInterval(loadObs, 10*60e3);
 document.addEventListener("visibilitychange", ()=>{ if(!document.hidden && obsData && Date.now()-obsData.at > 10*60e3) loadObs(); });
 if("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("sw.js").catch(()=>{});
+
+/* ============ install prompt (website only, never inside the installed app) ============ */
+(function(){
+  const isStandalone = () => matchMedia("(display-mode: standalone)").matches || matchMedia("(display-mode: fullscreen)").matches || navigator.standalone === true;
+  const snoozed = () => { const t = ls.get("installSnooze"); return t && Date.now() < t; };
+  const box = $("#install"), btn = $("#btnInstall");
+  const hide = () => { box.hidden = true; };
+  let deferred = null;
+  if(isStandalone()) return;                       // running as the installed app: never prompt
+  window.addEventListener("beforeinstallprompt", e => {   // Chrome/Edge/Samsung on Android
+    e.preventDefault(); deferred = e;
+    if(!snoozed()) setTimeout(()=>{ if(!isStandalone()) box.hidden = false; }, 2500);
+  });
+  window.addEventListener("appinstalled", () => { hide(); deferred = null; ls.set("installSnooze", Date.now()+3650*864e5); });
+  btn.onclick = async () => {
+    if(deferred){ deferred.prompt(); const r = await deferred.userChoice.catch(()=>null); deferred = null; hide();
+      if(r && r.outcome==="dismissed") ls.set("installSnooze", Date.now()+7*864e5); }
+    else hide();
+  };
+  $("#btnInstallX").onclick = () => { hide(); ls.set("installSnooze", Date.now()+14*864e5); };
+  // iPhone/iPad Safari has no install event: show the manual steps instead
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
+  if(ios && !snoozed()){
+    $("#installMsg").innerHTML = "Tap <b>Share</b> <span style='font-size:15px'>⎋</span> then <b>Add to Home Screen</b>.";
+    btn.textContent = "OK";
+    setTimeout(()=>{ box.hidden = false; }, 2500);
+  }
+  window.matchMedia("(display-mode: standalone)").addEventListener?.("change", e=>{ if(e.matches) hide(); });
+})();
 </script>
 </body>
 </html>
