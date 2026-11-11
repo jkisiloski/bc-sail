@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1d2e">
+<title>BC Sail</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root{--bg:#0b1d2e;--panel:#10283e;--line:#1f3d58;--txt:#e8f0f7;--mut:#8fa7bd;--acc:#4fc3f7;--ok:#4caf50;--warn:#ffb300;--bad:#ef5350}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font:14px/1.35 system-ui,-apple-system,Roboto,sans-serif;overflow:hidden}
+  #map{position:absolute;inset:0;background:#aad3df}
+  .top{position:absolute;top:0;left:0;right:0;z-index:1000;padding:calc(env(safe-area-inset-top) + 8px) 8px 0;display:flex;gap:6px;flex-wrap:wrap;pointer-events:none}
+  .top>*{pointer-events:auto}
+  .seg{display:flex;background:rgba(16,40,62,.92);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .seg button{background:none;border:0;color:var(--mut);padding:9px 11px;font:600 13px system-ui;cursor:pointer}
+  .seg button.on{background:var(--acc);color:#04121f}
+  .chip{display:flex;align-items:center;gap:6px;background:rgba(16,40,62,.92);border:1px solid var(--line);border-radius:10px;padding:0 10px;color:var(--mut);font-size:12px;cursor:pointer;min-height:36px}
+  .chip input{margin:0}
+  #status{margin-left:auto;display:flex;gap:4px}
+  .dot{width:9px;height:9px;border-radius:50%;background:#555;display:inline-block}
+  .dot.ok{background:var(--ok)}.dot.load{background:var(--warn);animation:p 1s infinite}.dot.bad{background:var(--bad)}.dot.stale{background:#ff8a65}
+  @keyframes p{50%{opacity:.3}}
+  #legend{position:absolute;right:8px;top:calc(env(safe-area-inset-top) + 96px);z-index:900;background:rgba(255,255,255,.88);border-radius:8px;padding:4px;max-height:45vh;overflow:hidden}
+  #legend img{display:block;max-height:44vh}
+  .bottom{position:absolute;left:0;right:0;bottom:0;z-index:1000;padding:8px 8px calc(env(safe-area-inset-bottom) + 8px);background:linear-gradient(transparent,rgba(11,29,46,.9) 30%)}
+  .timebar{display:flex;align-items:center;gap:8px;background:rgba(16,40,62,.95);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
+  .timebar button{background:var(--acc);border:0;border-radius:8px;width:38px;height:38px;font-size:16px;color:#04121f;flex:none}
+  .timebar button.sec{background:#1f3d58;color:var(--txt)}
+  #tlabel{min-width:92px;font-weight:700;font-size:13px;text-align:center}
+  #tlabel small{display:block;font-weight:400;color:var(--mut);font-size:11px}
+  input[type=range]{flex:1;accent-color:var(--acc);height:30px}
+  #note{font-size:11px;color:var(--warn);text-align:center;min-height:0;margin-top:4px}
+  .fab{position:absolute;right:10px;z-index:1000;bottom:calc(env(safe-area-inset-bottom) + 84px);display:flex;flex-direction:column;gap:8px}
+  .fab button{width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:rgba(16,40,62,.95);color:var(--txt);font-size:18px}
+  /* sheet */
+  #sheet{position:absolute;left:0;right:0;bottom:0;z-index:2000;background:var(--panel);border-top:1px solid var(--line);border-radius:16px 16px 0 0;max-height:72vh;overflow:auto;transform:translateY(105%);transition:transform .25s;padding:6px 0 calc(env(safe-area-inset-bottom) + 12px);box-shadow:0 -8px 30px rgba(0,0,0,.45)}
+  #sheet.open{transform:none}
+  .sh-head{display:flex;align-items:flex-start;gap:8px;padding:6px 14px 8px;position:sticky;top:-6px;background:var(--panel);z-index:2}
+  .sh-head h2{font-size:16px;margin:2px 0 0;flex:1}
+  .sh-head small{color:var(--mut);font-weight:400;display:block;font-size:12px}
+  .x{background:#1f3d58;border:0;color:var(--txt);border-radius:8px;width:34px;height:34px;font-size:16px}
+  .sec-t{padding:8px 14px 4px;color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+  .strip{overflow-x:auto;padding:0 14px 6px}
+  .strip table{border-collapse:collapse;font-size:12px}
+  .strip td,.strip th{text-align:center;min-width:34px;padding:3px 1px;white-space:nowrap}
+  .strip th{color:var(--mut);font-weight:500}
+  .strip .day th{color:var(--txt);text-align:left;font-weight:700;padding-top:2px}
+  .strip .day th.d{border-left:2px solid var(--line);padding-left:4px}
+  .strip td.d{border-left:2px solid var(--line)}
+  .strip td.now{outline:2px solid var(--acc);outline-offset:-2px}
+  .rowlab{position:sticky;left:-14px;background:var(--panel);color:var(--mut);text-align:left!important;padding-right:6px!important;font-size:11px;min-width:44px!important;z-index:1}
+  .kv{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 14px}
+  .kv div{background:#0d2236;border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+  .kv b{display:block;font-size:20px}
+  .kv span{color:var(--mut);font-size:11px}
+  .ev{padding:0 14px}
+  .ev div{display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:6px 0}
+  .ev .f{color:#81d4fa}.ev .e{color:#ffcc80}.ev .s{color:var(--mut)}
+  .err{color:var(--bad);padding:4px 14px;font-size:12px}
+  .muted{color:var(--mut);font-size:12px;padding:2px 14px}
+  canvas.spark{width:calc(100% - 28px);margin:0 14px;height:90px;display:block}
+  /* markers */
+  .obs{display:flex;align-items:center;gap:2px;white-space:nowrap;font:700 11px system-ui;color:#fff;text-shadow:0 0 3px #000,0 0 3px #000}
+  .obs svg{flex:none}
+  .cur{font:700 11px system-ui;color:#fff;text-shadow:0 0 3px #000,0 0 3px #000;white-space:nowrap;display:flex;align-items:center;gap:2px}
+  .leaflet-control-attribution{font-size:9px;margin-bottom:calc(env(safe-area-inset-bottom) + 76px)!important}
+  .tapmark{width:14px;height:14px;border:3px solid #fff;border-radius:50%;background:var(--acc);box-shadow:0 0 0 2px #000}
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div class="top">
+  <div class="seg" id="layerSeg">
+    <button data-l="wind" class="on">Wind</button>
+    <button data-l="gust">Gusts</button>
+    <button data-l="current">Current</button>
+    <button data-l="temp">Water °C</button>
+    <button data-l="none">Off</button>
+  </div>
+  <label class="chip"><input type="checkbox" id="tObs" checked>Obs wind</label>
+  <label class="chip"><input type="checkbox" id="tCur" checked>Tidal stns</label>
+  <label class="chip"><input type="checkbox" id="tSea">Seamarks</label>
+  <div class="chip" id="status" title="Data status: forecast maps / observations / tidal stations">
+    <span class="dot" id="sMap"></span><span class="dot" id="sObs"></span><span class="dot" id="sCur"></span>
+  </div>
+</div>
+
+<div id="legend" hidden><img id="legendImg" alt="legend"></div>
+
+<div class="fab">
+  <button id="btnLoc" title="My location">◎</button>
+  <button id="btnRefresh" title="Refresh data">⟳</button>
+</div>
+
+<div class="bottom">
+  <div class="timebar">
+    <button id="btnPlay">▶</button>
+    <button id="btnNow" class="sec" title="Jump to now">⌂</button>
+    <input type="range" id="slider" min="0" max="47" value="0" step="1">
+    <div id="tlabel">—</div>
+  </div>
+  <div id="note"></div>
+</div>
+
+<div id="sheet"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+"use strict";
+/* ============ config ============ */
+const TZ = "America/Vancouver";
+const GEOMET = "https://geo.weather.gc.ca/geomet";
+const IWLS = "https://api-iwls.dfo-mpo.gc.ca/api/v1";
+const OGC = "https://api.weather.gc.ca/collections";
+const KMH2KT = 1/1.852, MS2KT = 1.943844;
+const SALISH = {s:47.0,n:51.0,w:-126.4,e:-122.0}; // approx CIOPS-SalishSea footprint
+const LAYERS = {
+  wind:   {name:"HRDPS-WEonG_2.5km_WindSpeed", style:"WINDSPEEDKNOTS-LINEAR", label:"HRDPS 2.5 km sustained wind (kt)"},
+  gust:   {name:"HRDPS-WEonG_2.5km_WindGust",  style:"GUST_INTERV_MS2KTS",    label:"HRDPS 2.5 km wind gusts (kt)"},
+  current:{name:{salish:"CIOPS-SalishSea_500m_SeaWaterVelocity_0.5m", west:"CIOPS-West_2km_SeaWaterVelocity_0.5m"}, style:"SEA_CURARROW_0MTO100M_SURFACE", label:"CIOPS surface current"},
+  temp:   {name:{salish:"CIOPS-SalishSea_500m_SeaWaterPotentialTemp_0.5m", west:"CIOPS-West_2km_SeaWaterPotentialTemp_0.5m"}, style:"SEA_TEMPSURF-DEFAULT", label:"CIOPS surface water temp"}
+};
+const HOURS = 48;
+
+/* ============ small utils ============ */
+const $ = s => document.querySelector(s);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const ls = {
+  get(k){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; }catch(e){ return null; } },
+  set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+};
+async function fetchJSON(url, {timeout=12000, tries=3, text=false}={}){
+  let last;
+  for(let i=0;i<tries;i++){
+    const ctl = new AbortController(); const t = setTimeout(()=>ctl.abort(), timeout);
+    try{
+      const r = await fetch(url, {signal:ctl.signal});
+      clearTimeout(t);
+      if(r.status===429){ await sleep(1500*(i+1)); last = new Error("rate limited"); continue; }
+      if(!r.ok) throw new Error("HTTP "+r.status);
+      return text ? await r.text() : await r.json();
+    }catch(e){ clearTimeout(t); last = e; await sleep(600*(i+1)); }
+  }
+  throw last;
+}
+const fmtTime = (d, o={hour:"numeric"}) => new Intl.DateTimeFormat("en-CA",{timeZone:TZ,...o}).format(d);
+const fmtDay = d => new Intl.DateTimeFormat("en-CA",{timeZone:TZ,weekday:"short",day:"numeric"}).format(d);
+const localDayKey = d => new Intl.DateTimeFormat("en-CA",{timeZone:TZ,year:"numeric",month:"2-digit",day:"2-digit"}).format(d);
+const isoZ = d => d.toISOString().slice(0,19)+"Z";
+const compass = deg => ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"][Math.round(((deg%360)+360)%360/22.5)%16];
+function setDot(id, state, title){ const el=$(id); el.className="dot "+state; if(title) el.title=title; }
+function windColor(kt){ // Windy-like scale
+  const s=[[0,"#6271b7"],[5,"#39a0c9"],[10,"#4aa86a"],[15,"#9ec43b"],[20,"#e8c51f"],[25,"#e88a1f"],[30,"#d6402d"],[35,"#b8235f"],[45,"#7a2b8c"]];
+  let c=s[0][1]; for(const [v,col] of s) if(kt>=v) c=col; return c;
+}
+function arrowSVG(deg, color="#fff", size=22){ // arrow pointing toward `deg` (direction of travel)
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" style="transform:rotate(${deg}deg)"><path d="M12 2 L18 14 L13.2 12.6 L13.2 22 L10.8 22 L10.8 12.6 L6 14 Z" fill="${color}" stroke="#000" stroke-width="1"/></svg>`;
+}
+
+/* ============ time ============ */
+const t0 = (()=>{ const d=new Date(); d.setUTCMinutes(0,0,0); return d; })();
+let tIdx = 0;
+const curTime = () => new Date(+t0 + tIdx*3600e3);
+function updateTimeLabel(){
+  const d = curTime();
+  $("#tlabel").innerHTML = `${fmtTime(d,{weekday:"short",hour:"numeric"})}<small>${tIdx===0?"now":"+"+tIdx+" h"}</small>`;
+}
+
+/* ============ map ============ */
+const map = L.map("map",{zoomControl:false, attributionControl:true, worldCopyJump:false}).setView(ls.get("view")?.c || [49.0,-123.6], ls.get("view")?.z || 8);
+map.on("moveend", ()=>{ ls.set("view",{c:[map.getCenter().lat,map.getCenter().lng], z:map.getZoom()}); maybeSwapModel(); refreshVisibleCurrents(); });
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:17, subdomains:"abc", attribution:"© OpenStreetMap"}).addTo(map);
+const seamarks = L.tileLayer("https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png",{maxZoom:17, attribution:"OpenSeaMap", opacity:.9});
+map.createPane("model"); map.getPane("model").style.zIndex = 350;
+map.createPane("marks"); map.getPane("marks").style.zIndex = 650;
+
+let activeKey = "wind", wms = null, wmsLayerName = null, layerExtent = {};
+let tileErrors = 0, tileLoads = 0;
+
+function inSalish(){ const c = map.getCenter(); return c.lat>SALISH.s && c.lat<SALISH.n && c.lng>SALISH.w && c.lng<SALISH.e; }
+function resolveLayerName(key){
+  const n = LAYERS[key].name; if(typeof n==="string") return n;
+  return (inSalish() && map.getZoom()>=8) ? n.salish : n.west;
+}
+async function getExtent(name){ // time extent of a layer, cached 30 min
+  const c = layerExtent[name]; if(c && Date.now()-c.at < 30*60e3) return c;
+  try{
+    const xml = await fetchJSON(`${GEOMET}?service=WMS&version=1.3.0&request=GetCapabilities&layer=${name}`,{text:true,timeout:15000});
+    const m = xml.match(/<Dimension name="time"[^>]*>([^<]+)</);
+    if(m){ const [a,b] = m[1].split("/"); layerExtent[name] = {start:new Date(a), end:new Date(b), at:Date.now()}; return layerExtent[name]; }
+  }catch(e){}
+  return null;
+}
+async function setModelLayer(key){
+  activeKey = key;
+  document.querySelectorAll("#layerSeg button").forEach(b=>b.classList.toggle("on", b.dataset.l===key));
+  ls.set("layer", key);
+  if(wms){ map.removeLayer(wms); wms=null; wmsLayerName=null; }
+  $("#legend").hidden = true;
+  if(key==="none"){ setDot("#sMap",""); $("#note").textContent=""; return; }
+  const name = resolveLayerName(key); wmsLayerName = name;
+  tileErrors = 0; tileLoads = 0; setDot("#sMap","load","Loading forecast map…");
+  wms = L.tileLayer.wms(GEOMET, {layers:name, styles:LAYERS[key].style, format:"image/png", transparent:true, version:"1.3.0", tileSize:512, zoomOffset:0, opacity: key==="current"?0.95:0.6, pane:"model", time:isoZ(curTime()), attribution:"ECCC MSC GeoMet"});
+  wms.on("tileerror", ()=>{ tileErrors++; if(tileErrors>3 && tileLoads===0) setDot("#sMap","bad","Forecast map tiles failing – tap ⟳"); });
+  wms.on("tileload", ()=>{ tileLoads++; setDot("#sMap","ok", LAYERS[key].label); });
+  wms.addTo(map);
+  $("#legendImg").src = `${GEOMET}?service=WMS&version=1.3.0&request=GetLegendGraphic&format=image/png&layer=${name}&style=${LAYERS[key].style}&sld_version=1.1.0&lang=en`;
+  $("#legendImg").onload = ()=>{ $("#legend").hidden=false; };
+  checkExtent();
+}
+async function checkExtent(){
+  if(!wmsLayerName) return;
+  const ext = await getExtent(wmsLayerName); const t = curTime();
+  if(ext && (t > ext.end)){ $("#note").textContent = `Map layer ends ${fmtTime(ext.end,{weekday:"short",hour:"numeric"})} – showing nothing past that.`; if(wms) wms.setOpacity(0); }
+  else { $("#note").textContent = ""; if(wms) wms.setOpacity(activeKey==="current"?0.95:0.6); }
+}
+function maybeSwapModel(){ if(activeKey==="current"||activeKey==="temp"){ const n=resolveLayerName(activeKey); if(n!==wmsLayerName) setModelLayer(activeKey); } }
+
+/* ============ observed wind (ECCC SWOB) ============ */
+const obsLayer = L.layerGroup().addTo(map);
+let obsData = ls.get("obs") || null;
+function pickNum(p, keys){ for(const k of keys){ if(p[k]!=null && p[k]!=="" && !isNaN(p[k])) return +p[k]; } return null; }
+async function loadObs(){
+  setDot("#sObs","load","Loading observations…");
+  try{
+    const since = isoZ(new Date(Date.now()-150*60e3));
+    const j = await fetchJSON(`${OGC}/swob-realtime/items?f=json&limit=1000&bbox=-134.5,47.6,-122.2,55.6&_is-minutely_obs-value=false&datetime=${since}/..`,{timeout:20000});
+    const by = {};
+    for(const f of j.features||[]){
+      const p=f.properties; const id=p["msc_id-value"]||p["stn_nam-value"]; const t=p["date_tm-value"];
+      const spd = pickNum(p,["avg_wnd_spd_10m_pst10mts","avg_wnd_spd_10m_pst2mts","avg_wnd_spd_10m_pst1hr"]);
+      if(spd==null) continue;
+      if(!by[id] || by[id].t < t){
+        by[id] = {id, name:p["stn_nam-value"], t, lat:f.geometry.coordinates[1], lon:f.geometry.coordinates[0],
+          spd: spd*KMH2KT,
+          gust: (v=>v==null?null:v*KMH2KT)(pickNum(p,["max_wnd_spd_10m_pst10mts","max_wnd_spd_10m_pst1hr"])),
+          dir: pickNum(p,["avg_wnd_dir_10m_pst10mts","avg_wnd_dir_10m_pst2mts","avg_wnd_dir_10m_pst1hr","wnd_dir_10m_pst10mts_max_spd"]),
+          sst: pickNum(p,["avg_sea_sfc_temp_pst10mts"]),
+          air: pickNum(p,["air_temp","avg_air_temp_pst1hr"]),
+          wave: pickNum(p,["sig_wave_hgt_pst20mts"])};
+      }
+    }
+    obsData = {at:Date.now(), list:Object.values(by)};
+    ls.set("obs", obsData);
+    setDot("#sObs","ok",`${obsData.list.length} stations, updated ${fmtTime(new Date(),{hour:"numeric",minute:"2-digit"})}`);
+  }catch(e){
+    setDot("#sObs", obsData ? "stale":"bad", obsData ? "Observations offline – showing saved data" : "Observations failed – tap ⟳");
+  }
+  drawObs();
+}
+function drawObs(){
+  obsLayer.clearLayers();
+  if(!$("#tObs").checked || !obsData) return;
+  for(const s of obsData.list){
+    const kt = Math.round(s.spd), g = s.gust!=null?Math.round(s.gust):null;
+    const arrow = s.dir!=null ? arrowSVG((s.dir+180)%360, windColor(s.spd), 22) : "";
+    const html = `<div class="obs">${arrow}<span>${kt}${g!=null&&g>kt?"<span style='color:#ffcc80'>G"+g+"</span>":""}</span></div>`;
+    L.marker([s.lat,s.lon],{pane:"marks", icon:L.divIcon({className:"", html, iconSize:[64,24], iconAnchor:[11,12]})})
+      .on("click", ev=>{ L.DomEvent.stopPropagation(ev); openSpot(s.lat, s.lon, {obs:s}); })
+      .addTo(obsLayer);
+  }
+}
+
+/* ============ CHS tidal current stations ============ */
+const curLayer = L.layerGroup().addTo(map);
+let curStations = [];
+const curCache = {}; // id -> {from,to,speed:[[t,v]],dir:[[t,v]],events:[]}
+const queue = []; let qBusy = false;
+function enqueue(fn){ return new Promise((res,rej)=>{ queue.push({fn,res,rej}); runQueue(); }); }
+async function runQueue(){ if(qBusy) return; qBusy=true; while(queue.length){ const {fn,res,rej}=queue.shift(); try{ res(await fn()); }catch(e){ rej(e); } await sleep(400); } qBusy=false; } // ≤3 req/s API limit
+async function loadCurStations(){
+  setDot("#sCur","load","Loading tidal current stations…");
+  let st = ls.get("curStations");
+  if(!st || Date.now()-st.at > 7*864e5){
+    try{
+      const all = await fetchJSON(`${IWLS}/stations?chs-region-code=PAC`,{timeout:20000});
+      st = {at:Date.now(), list: all.filter(s=>s.timeSeries.some(t=>t.code==="wcsp1")).map(s=>({id:s.id, code:s.code, name:s.officialName.trim(), lat:s.latitude, lon:s.longitude}))};
+      ls.set("curStations", st);
+    }catch(e){ if(!st){ setDot("#sCur","bad","Tidal stations failed – tap ⟳"); return; } }
+  }
+  curStations = st.list;
+  setDot("#sCur","ok",`${curStations.length} CHS current stations`);
+  drawCurrents(); refreshVisibleCurrents();
+}
+function cacheKeyCur(id){ return "cur:"+id+":"+t0.toISOString().slice(0,13); }
+async function getCurrentSeries(s){
+  if(curCache[s.id]) return curCache[s.id];
+  const saved = ls.get(cacheKeyCur(s.id)); if(saved){ curCache[s.id]=saved; return saved; }
+  const from = isoZ(new Date(+t0-3600e3)), to = isoZ(new Date(+t0+(HOURS+3)*3600e3));
+  const q = c => `${IWLS}/stations/${s.id}/data?time-series-code=${c}&from=${from}&to=${to}`;
+  const sp = await enqueue(()=>fetchJSON(q("wcsp1")));
+  const dr = await enqueue(()=>fetchJSON(q("wcdp1")));
+  const evFrom = isoZ(new Date(+t0-6*3600e3));
+  const ev = await enqueue(()=>fetchJSON(`${IWLS}/stations/${s.id}/data?time-series-code=wcp1-events&from=${evFrom}&to=${to}`)).catch(()=>[]);
+  const data = {speed:sp.map(x=>[+new Date(x.eventDate), x.value]), dir:dr.map(x=>[+new Date(x.eventDate), x.value]), events:ev.map(x=>({t:+new Date(x.eventDate), q:x.qualifier, v:x.value}))};
+  curCache[s.id] = data; ls.set(cacheKeyCur(s.id), data);
+  return data;
+}
+function interp(series, t){
+  if(!series||!series.length) return null;
+  for(let i=1;i<series.length;i++){ if(series[i][0]>=t){ const [ta,va]=series[i-1],[tb,vb]=series[i]; return va+(vb-va)*((t-ta)/(tb-ta||1)); } }
+  return null;
+}
+function nearestVal(series,t){ if(!series||!series.length) return null; let b=series[0]; for(const p of series) if(Math.abs(p[0]-t)<Math.abs(b[0]-t)) b=p; return b[1]; }
+const curMarkers = {};
+function drawCurrents(){
+  curLayer.clearLayers();
+  if(!$("#tCur").checked) return;
+  for(const s of curStations){
+    const d = curCache[s.id]; const t = +curTime();
+    let html;
+    if(d){
+      const v = interp(d.speed,t), dir = nearestVal(d.dir,t);
+      html = v==null ? `<div class="cur">◇ –</div>` : `<div class="cur">${arrowSVG(dir??0, v<0.3?"#bbb":(v>3?"#ff5252":"#4fc3f7"), 20)}<span>${v.toFixed(1)}</span></div>`;
+    } else html = `<div class="cur" style="opacity:.7">◇ ${s.name.split(" ")[0]}</div>`;
+    const m = L.marker([s.lat,s.lon],{pane:"marks", icon:L.divIcon({className:"", html, iconSize:[60,22], iconAnchor:[10,11]})})
+      .on("click", ev=>{ L.DomEvent.stopPropagation(ev); openStation(s); }).addTo(curLayer);
+    curMarkers[s.id]=m;
+  }
+}
+let refreshTimer=null;
+function refreshVisibleCurrents(){
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(async ()=>{
+    if(!$("#tCur").checked || !curStations.length) return;
+    const b = map.getBounds().pad(0.1);
+    const vis = curStations.filter(s=>b.contains([s.lat,s.lon]) && !curCache[s.id]);
+    if(!vis.length) return;
+    setDot("#sCur","load",`Loading ${vis.length} station predictions…`);
+    let fail=0;
+    for(const s of vis){ try{ await getCurrentSeries(s); drawCurrents(); }catch(e){ fail++; } }
+    setDot("#sCur", fail? (fail===vis.length?"bad":"stale") : "ok", fail?`${fail} stations failed to load`:`${curStations.length} CHS current stations`);
+  }, 500);
+}
+
+/* ============ spot forecast sheet ============ */
+let tapMarker = null;
+function closeSheet(){ $("#sheet").classList.remove("open"); if(tapMarker){ map.removeLayer(tapMarker); tapMarker=null; } }
+function sheetHead(title, sub){ return `<div class="sh-head"><h2>${title}<small>${sub||""}</small></h2><button class="x" onclick="closeSheet()">✕</button></div>`; }
+async function gfi(layer, lat, lon, time){
+  const d=0.005;
+  const u = `${GEOMET}?service=WMS&version=1.3.0&request=GetFeatureInfo&layers=${layer}&query_layers=${layer}&crs=EPSG:4326&bbox=${lat-d},${lon-d},${lat+d},${lon+d}&width=3&height=3&i=1&j=1&info_format=application/json&time=${isoZ(time)}`;
+  const j = await fetchJSON(u,{timeout:10000,tries:2});
+  const v = j.features?.[0]?.properties?.value; return (v==null||isNaN(v)) ? null : +v;
+}
+async function oceanAt(lat, lon, time){
+  const inS = lat>SALISH.s && lat<SALISH.n && lon>SALISH.w && lon<SALISH.e;
+  const tryModel = async (pfx)=>{
+    const [x,y,k] = await Promise.all([gfi(`${pfx}_SeaWaterVelocityX_0.5m`,lat,lon,time).catch(()=>null), gfi(`${pfx}_SeaWaterVelocityY_0.5m`,lat,lon,time).catch(()=>null), gfi(`${pfx}_SeaWaterPotentialTemp_0.5m`,lat,lon,time).catch(()=>null)]);
+    return {x,y,k,model:pfx.split("_").slice(0,2).join(" ")};
+  };
+  let r = inS ? await tryModel("CIOPS-SalishSea_500m") : null;
+  if(!r || (r.x==null && r.k==null)) r = await tryModel("CIOPS-West_2km");
+  return r;
+}
+async function openSpot(lat, lon, {obs}={}){
+  if(tapMarker) map.removeLayer(tapMarker);
+  tapMarker = L.marker([lat,lon],{icon:L.divIcon({className:"tapmark",iconSize:[14,14]}), pane:"marks"}).addTo(map);
+  const sh = $("#sheet");
+  const title = obs ? obs.name : `${lat.toFixed(3)}°, ${lon.toFixed(3)}°`;
+  sh.innerHTML = sheetHead(title, obs?`Observed ${fmtTime(new Date(obs.t),{weekday:"short",hour:"numeric",minute:"2-digit"})}`:"Spot forecast") +
+    (obs? `<div class="kv"><div><span>Sustained (10 min)</span><b style="color:${windColor(obs.spd)}">${Math.round(obs.spd)} kt</b><span>${obs.dir!=null?compass(obs.dir)+" "+Math.round(obs.dir)+"°":""}</span></div><div><span>Gust</span><b>${obs.gust!=null?Math.round(obs.gust)+" kt":"–"}</b><span>${obs.air!=null?"Air "+obs.air.toFixed(1)+"°C":""}${obs.sst!=null?" · Sea "+obs.sst.toFixed(1)+"°C":""}${obs.wave!=null?" · Hs "+obs.wave.toFixed(1)+" m":""}</span></div></div>`:"") +
+    `<div class="sec-t">Wind forecast · ECCC HRDPS/GEM (kt)</div><div id="spWind" class="muted">Loading…</div>
+     <div class="sec-t">Water at selected time · CIOPS model</div><div id="spOcean" class="muted">Loading…</div>`;
+  sh.classList.add("open"); sh.scrollTop=0;
+  // wind strip
+  (async()=>{
+    const key = `om:${lat.toFixed(2)},${lon.toFixed(2)}`;
+    let j = null;
+    try{
+      j = await fetchJSON(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=wind_speed_10m,wind_gusts_10m,wind_direction_10m&models=gem_seamless&wind_speed_unit=kn&timezone=GMT&forecast_days=4&timeformat=unixtime`,{timeout:12000});
+      ls.set(key,{at:Date.now(), j});
+    }catch(e){ const c = ls.get(key); if(c){ j=c.j; } }
+    const el = $("#spWind"); if(!el) return;
+    if(!j){ el.className="err"; el.textContent="Couldn't load the wind forecast. Check signal and tap the spot again."; return; }
+    el.className="strip"; el.innerHTML = windStrip(j.hourly);
+    const nowCell = el.querySelector("td.now"); if(nowCell) el.scrollLeft = Math.max(0, nowCell.offsetLeft-60);
+  })();
+  // ocean
+  (async()=>{
+    const r = await oceanAt(lat, lon, curTime()).catch(()=>null);
+    const el = $("#spOcean"); if(!el) return;
+    if(!r || (r.x==null && r.k==null)){ el.textContent="No model water data here (on land or outside model)."; return; }
+    const spd = (r.x!=null&&r.y!=null) ? Math.hypot(r.x,r.y)*MS2KT : null;
+    const dir = (r.x!=null&&r.y!=null) ? (Math.atan2(r.x,r.y)*180/Math.PI+360)%360 : null;
+    el.className="kv"; el.innerHTML = `<div><span>Surface current · ${fmtTime(curTime(),{weekday:"short",hour:"numeric"})}</span><b>${spd!=null?spd.toFixed(1)+" kt":"–"}</b><span>${dir!=null?"toward "+compass(dir)+" "+Math.round(dir)+"°":""}</span></div><div><span>Water temp (0.5 m)</span><b>${r.k!=null?(r.k-273.15).toFixed(1)+" °C":"–"}</b><span>${r.model}</span></div>`;
+  })();
+}
+function windStrip(h){
+  const now = Date.now()/1000 - 1800;
+  const idx = h.time.map((t,i)=>i).filter(i=>h.time[i] >= now-3600*2);
+  let days="<tr class='day'><th class='rowlab'></th>", hrs="<tr><th class='rowlab'>Local</th>", dir="<tr><td class='rowlab'>Dir</td>", w="<tr><td class='rowlab'>Wind</td>", g="<tr><td class='rowlab'>Gust</td>";
+  let lastDay=null, dayCells=[];
+  const sel = +curTime()/1000;
+  idx.forEach(i=>{
+    const d = new Date(h.time[i]*1000); const dk = localDayKey(d);
+    const first = dk!==lastDay; if(first){ dayCells.push([fmtDay(d),0]); lastDay=dk; }
+    dayCells[dayCells.length-1][1]++;
+    const cls = (first?"d ":"") + (Math.abs(h.time[i]-sel)<1800?"now":"");
+    const ws=h.wind_speed_10m[i], gs=h.wind_gusts_10m[i], wd=h.wind_direction_10m[i];
+    hrs += `<th class="${first?'d':''}">${fmtTime(d,{hour:"numeric"}).replace(/\s?[ap]\.?m\.?/i,m=>m.trim()[0].toLowerCase())}</th>`;
+    dir += `<td class="${cls}">${wd!=null?arrowSVG((wd+180)%360,"#cfe3f3",16):""}</td>`;
+    w += `<td class="${cls}" style="background:${windColor(ws)};color:#fff;font-weight:700;text-shadow:0 0 2px #000">${ws!=null?Math.round(ws):"–"}</td>`;
+    g += `<td class="${cls}" style="color:${windColor(gs)};font-weight:700">${gs!=null?Math.round(gs):"–"}</td>`;
+  });
+  dayCells.forEach(([l,s],k)=> days += `<th colspan="${s}" class="${k?'d':''}" ${k?'':'style="text-align:right;padding-right:6px"'}>${l}</th>`);
+  return `<table>${days}</tr>${hrs}</tr>${dir}</tr>${w}</tr>${g}</tr></table>`;
+}
+
+async function openStation(s){
+  if(tapMarker){ map.removeLayer(tapMarker); tapMarker=null; }
+  const sh = $("#sheet");
+  sh.innerHTML = sheetHead(s.name, "CHS tidal current prediction (kt)") + `<div id="stBody" class="muted">Loading predictions…</div>`;
+  sh.classList.add("open"); sh.scrollTop=0;
+  try{
+    const d = await getCurrentSeries(s); drawCurrents();
+    const t = +curTime(); const v = interp(d.speed,t), dir = nearestVal(d.dir,t);
+    const evs = d.events.filter(e=>e.t > Date.now()-3*3600e3).slice(0,12);
+    const lab = q => q==="SLACK"?["Slack","s"]:q==="EXTREMA_FLOOD"?["Max flood","f"]:q==="EXTREMA_EBB"?["Max ebb","e"]:[q,"s"];
+    let evh = ""; let lastDay=null;
+    for(const e of evs){ const dt=new Date(e.t); const dk=localDayKey(dt); const [l,c]=lab(e.q);
+      evh += `<div><span>${dk!==lastDay?"<b>"+fmtDay(dt)+"</b> ":""}${fmtTime(dt,{hour:"numeric",minute:"2-digit"})}</span><span class="${c}">${l}${e.q!=="SLACK"?" "+(+e.v).toFixed(1)+" kt":""}</span></div>`; lastDay=dk; }
+    $("#stBody").className=""; $("#stBody").innerHTML =
+      `<div class="kv"><div><span>At ${fmtTime(curTime(),{weekday:"short",hour:"numeric"})}</span><b>${v!=null?v.toFixed(1)+" kt":"–"}</b><span>${dir!=null?"toward "+compass(dir)+" "+Math.round(dir)+"°":""}</span></div><div><span>Station</span><b style="font-size:15px">${s.code}</b><span>${s.lat.toFixed(3)}, ${s.lon.toFixed(3)}</span></div></div>
+       <div class="sec-t">Next 48 h</div><canvas class="spark" id="spark"></canvas>
+       <div class="sec-t">Slack &amp; max times (local)</div><div class="ev">${evh||"<div class='s'>No events returned</div>"}</div>
+       <div class="muted" style="padding-top:8px">Predictions from the Canadian Hydrographic Service. Not for navigation – check official tables.</div>`;
+    drawSpark($("#spark"), d, t);
+  }catch(e){ $("#stBody").className="err"; $("#stBody").textContent = "Couldn't load predictions ("+e.message+"). Tap the station again to retry."; }
+}
+function drawSpark(cv, d, sel){
+  const dpr = devicePixelRatio||1, W = cv.clientWidth, H = cv.clientHeight; cv.width=W*dpr; cv.height=H*dpr;
+  const c = cv.getContext("2d"); c.scale(dpr,dpr);
+  // signed: flood positive, ebb negative using events to decide sign between slacks
+  const pts = d.speed.filter(p=>p[0]>=Date.now()-3600e3);
+  if(!pts.length) return;
+  const fl = d.events.find(e=>e.q==="EXTREMA_FLOOD");
+  const floodDir = fl ? nearestVal(d.dir, fl.t) : null;
+  const sgn = t => { if(floodDir==null) return 1; const dd = nearestVal(d.dir,t); const diff = Math.abs(((dd-floodDir)%360+540)%360-180); return diff<90?1:-1; };
+  const vals = pts.map(p=>[p[0], p[1]*sgn(p[0])]);
+  const max = Math.max(1, ...vals.map(v=>Math.abs(v[1])));
+  const x = t => (t-pts[0][0])/(pts.at(-1)[0]-pts[0][0])*W, y = v => H/2 - v/max*(H/2-8);
+  c.strokeStyle="#1f3d58"; c.beginPath(); c.moveTo(0,H/2); c.lineTo(W,H/2); c.stroke();
+  c.fillStyle="#8fa7bd"; c.font="10px system-ui"; c.fillText("flood "+max.toFixed(1),2,10); c.fillText("ebb",2,H-2);
+  c.strokeStyle="#4fc3f7"; c.lineWidth=2; c.beginPath(); vals.forEach((v,i)=> i?c.lineTo(x(v[0]),y(v[1])):c.moveTo(x(v[0]),y(v[1]))); c.stroke();
+  c.strokeStyle="#ffb300"; c.beginPath(); c.moveTo(x(sel),0); c.lineTo(x(sel),H); c.stroke();
+  // midnight ticks
+  c.fillStyle="#8fa7bd"; for(let t=pts[0][0]; t<pts.at(-1)[0]; t+=3600e3){ const d0=new Date(t); if(fmtTime(d0,{hour:"numeric",hourCycle:"h23"})==="00"){ c.fillRect(x(t),H-6,1,6); c.fillText(fmtDay(d0),x(t)+2,H-8);} }
+}
+
+/* ============ wiring ============ */
+document.querySelectorAll("#layerSeg button").forEach(b=>b.onclick=()=>setModelLayer(b.dataset.l));
+$("#tObs").onchange = ()=>{ ls.set("tObs",$("#tObs").checked); drawObs(); };
+$("#tCur").onchange = ()=>{ ls.set("tCur",$("#tCur").checked); drawCurrents(); refreshVisibleCurrents(); };
+$("#tSea").onchange = ()=>{ ls.set("tSea",$("#tSea").checked); $("#tSea").checked ? seamarks.addTo(map) : map.removeLayer(seamarks); };
+let tTimer=null;
+$("#slider").max = HOURS;
+$("#slider").oninput = ()=>{ tIdx = +$("#slider").value; updateTimeLabel(); drawCurrents();
+  clearTimeout(tTimer); tTimer = setTimeout(()=>{ if(wms){ wms.setParams({time:isoZ(curTime())}); checkExtent(); } }, 250); };
+let playing=null;
+$("#btnPlay").onclick = ()=>{
+  if(playing){ clearInterval(playing); playing=null; $("#btnPlay").textContent="▶"; return; }
+  $("#btnPlay").textContent="❚❚";
+  playing = setInterval(()=>{ tIdx = (tIdx+1) % (HOURS+1); $("#slider").value=tIdx; updateTimeLabel(); drawCurrents(); if(wms){ wms.setParams({time:isoZ(curTime())}); checkExtent(); } }, 1600);
+};
+$("#btnNow").onclick = ()=>{ tIdx=0; $("#slider").value=0; $("#slider").oninput(); };
+$("#btnRefresh").onclick = ()=>{ for(const k in curCache) delete curCache[k]; layerExtent={}; loadObs(); loadCurStations(); setModelLayer(activeKey); };
+$("#btnLoc").onclick = ()=>{ if(!navigator.geolocation) return; navigator.geolocation.getCurrentPosition(p=>{ map.setView([p.coords.latitude,p.coords.longitude], Math.max(map.getZoom(),10)); L.circleMarker([p.coords.latitude,p.coords.longitude],{radius:7,color:"#fff",fillColor:"#2196f3",fillOpacity:1,weight:3,pane:"marks"}).addTo(map); }, ()=>{ $("#note").textContent="Location unavailable."; }, {enableHighAccuracy:true,timeout:10000}); };
+map.on("click", e=>{ if($("#sheet").classList.contains("open")) { closeSheet(); return; } openSpot(e.latlng.lat, e.latlng.lng); });
+
+// restore prefs
+if(ls.get("tObs")===false) $("#tObs").checked=false;
+if(ls.get("tCur")===false) $("#tCur").checked=false;
+if(ls.get("tSea")) { $("#tSea").checked=true; seamarks.addTo(map); }
+updateTimeLabel();
+setModelLayer(ls.get("layer") || "wind");
+loadObs(); loadCurStations();
+setInterval(loadObs, 10*60e3);
+document.addEventListener("visibilitychange", ()=>{ if(!document.hidden && obsData && Date.now()-obsData.at > 10*60e3) loadObs(); });
+if("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script>
+</body>
+</html>
