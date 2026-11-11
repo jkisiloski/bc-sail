@@ -656,7 +656,7 @@ function updateSummary(){
     $("#sumMain").innerHTML = r ? `${sp.name.replace(/ \(.*\)/,"")} · <span style="color:${starColor(r.stars)}">${ftRange(r.ft)}</span> <span style="color:${starColor(r.stars)};font-size:12px">${starStr(r.stars)}</span>` : (surfLoading ? "Running surf model…" : "Surf model loading…");
     $("#sumSub").textContent = r ? `${fmtTime(d,{weekday:"short",hour:"numeric"})}${tIdx===0?" (now)":" · +"+tIdx+" h"} · ${r.T>0.5?r.T.toFixed(0)+" s · ":""}wind ${Math.round(r.kt)} kn ${compass(r.wdir)} ${r.state}` : "Experimental · tap a spot for details";
     $("#sumSea").hidden = true;
-    const te = $("#sumTide"); te.innerHTML = r ? `<span class="tw">≈</span> Tide ${r.eta.toFixed(1)} m · ${r.type} · surf zone ~${Math.round(r.width)} m` : "";
+    const te = $("#sumTide"); te.innerHTML = r ? `<span class="tw">≈</span> ${r.ft>=0.8 ? (r.shape==="closeout"||r.shape==="mostly closing" ? r.shape : `${r.hand.toLowerCase()} ${r.shape==="point"?"off the point":r.shape}`)+" · " : ""}tide ${r.eta.toFixed(1)} m` : "";
     return;
   }
   $("#sumMain").innerHTML = f ? `<span style="color:${windColor(f.w)}">${Math.round(f.w)} kn</span> ${compass(f.d)} · gusts <span style="color:${windColor(f.g)}">${Math.round(f.g)}</span>` : "Wind forecast loading…";
@@ -985,7 +985,8 @@ function openMarine(){
    Waves: SPM fetch/duration-limited wind-wave growth summed over a ±60° spread,
    decaying after the wind eases; breaking height via Komar–Gaughan; tide + profile
    decide break position/type. Uncalibrated – treat as a guide only. */
-const SPOTS = [{"id":"goose","name":"Goose Spit","lat":49.664,"lon":-124.902,"normal":159,"fetch":[2,2,2,2,2,34,24,22,26,32,38,50,152,20,13,10,20,11,6,5,4,4,3,4,4,5,5,6,6,5,3,3,2,2,2,2],"prof":[[0.05,2.4],[0.15,1.2],[0.275,-1.2],[0.425,-2.5],[0.625,-3.7],[0.875,-22.6],[1.25,-41.9],[2,-42.3]]},{"id":"holmes","name":"Point Holmes","lat":49.692,"lon":-124.868,"normal":110,"fetch":[2,28,32,31,23,31,20,19,20,26,32,46,42,78,21,39,13,14,16,11,9,8,2,2,2,2,2,2,2,2,2,2,2,2,2,2],"prof":[[0.275,0],[0.425,-0.6],[0.625,-7.9],[0.875,-9.3],[1.25,-10.8],[2,-10.7]]},{"id":"kye","name":"Kye Bay","lat":49.707,"lon":-124.871,"normal":70,"fetch":[51,35,30,29,24,30,29,20,18,23,30,42,43,82,25,25,15,16,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,43,52,39],"prof":[[0.15,3.7],[0.275,3.7],[0.425,4.5],[0.625,1.8],[0.875,-4.3],[1.25,-4.3],[2,-16.1]]},{"id":"kin","name":"Kin Beach","lat":49.728,"lon":-124.897,"normal":45,"fetch":[28,35,30,29,29,22,30,21,21,21,29,39,48,86,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,5,35,38,49,35],"prof":[[0.15,4.3],[0.275,1.5],[0.425,-2.1],[0.625,-5.2],[0.875,-5.9],[1.25,-6.9],[2,-58.7]]},{"id":"denny","name":"Little River (Denny Rd)","lat":49.738,"lon":-124.906,"normal":40,"fetch":[26,35,30,28,28,24,30,30,22,21,29,37,54,87,29,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,7,36,36,48,32],"prof":[[0.05,-1.8],[0.15,-7.3],[0.275,-15.6],[0.425,-31.1],[0.625,-28.7],[0.875,-47.5],[1.25,-51.2],[2,-55.6]]},{"id":"bates","name":"Bates Beach","lat":49.775,"lon":-124.975,"normal":49,"fetch":[30,22,32,29,28,28,30,24,34,26,26,40,60,96,4,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,6,30,46,32],"prof":[[0.15,-1.1],[0.275,-6.1],[0.425,-8.8],[0.625,-11],[0.875,-19.2],[1.25,-42.1],[2,-58.4]]},{"id":"kitty","name":"Kitty Coleman","lat":49.789,"lon":-124.996,"normal":52,"fetch":[27,23,42,29,22,28,30,26,35,27,27,41,62,99,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,28,42,44],"prof":[[0.15,-0.5],[0.275,-4.6],[0.425,-5.3],[0.625,-8.4],[0.875,-31.1],[1.25,-32.9],[2,-71.3]]},{"id":"williams","name":"Williams Beach","lat":49.835,"lon":-125.059,"normal":42,"fetch":[26,28,28,19,28,28,28,31,35,39,32,34,75,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,7,40,21,35],"prof":[[0.275,-1.5],[0.425,-4],[0.625,-9.8],[0.875,-8.8],[1.25,-65.6],[2,-87.5]]}];
+// kind: "beach" (default) or "point"; wrap = how many degrees of swell a point bends around itself
+const SPOTS = [{"id":"goose","name":"Goose Spit","lat":49.664,"lon":-124.902,"normal":159,"fetch":[2,2,2,2,2,34,24,22,26,32,38,50,152,20,13,10,20,11,6,5,4,4,3,4,4,5,5,6,6,5,3,3,2,2,2,2],"prof":[[0.05,2.4],[0.15,1.2],[0.275,-1.2],[0.425,-2.5],[0.625,-3.7],[0.875,-22.6],[1.25,-41.9],[2,-42.3]]},{"id":"holmes","name":"Point Holmes","lat":49.692,"lon":-124.868,"normal":110,"fetch":[2,28,32,31,23,31,20,19,20,26,32,46,42,78,21,39,13,14,16,11,9,8,2,2,2,2,2,2,2,2,2,2,2,2,2,2],"prof":[[0.275,0],[0.425,-0.6],[0.625,-7.9],[0.875,-9.3],[1.25,-10.8],[2,-10.7]]},{"id":"kye","name":"Kye Bay","lat":49.707,"lon":-124.871,"normal":70,"fetch":[51,35,30,29,24,30,29,20,18,23,30,42,43,82,25,25,15,16,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,43,52,39],"prof":[[0.15,3.7],[0.275,3.7],[0.425,4.5],[0.625,1.8],[0.875,-4.3],[1.25,-4.3],[2,-16.1]]},{"id":"kin","name":"Kin Beach","lat":49.728,"lon":-124.897,"normal":45,"fetch":[28,35,30,29,29,22,30,21,21,21,29,39,48,86,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,5,35,38,49,35],"prof":[[0.15,4.3],[0.275,1.5],[0.425,-2.1],[0.625,-5.2],[0.875,-5.9],[1.25,-6.9],[2,-58.7]]},{"id":"denny","name":"Little River (Denny Rd)","lat":49.738,"lon":-124.906,"normal":40,"kind":"point","wrap":50,"fetch":[26,35,30,28,28,24,30,30,22,21,29,37,54,87,29,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,7,36,36,48,32],"prof":[[0.05,-1.8],[0.15,-7.3],[0.275,-15.6],[0.425,-31.1],[0.625,-28.7],[0.875,-47.5],[1.25,-51.2],[2,-55.6]]},{"id":"bates","name":"Bates Beach","lat":49.775,"lon":-124.975,"normal":49,"fetch":[30,22,32,29,28,28,30,24,34,26,26,40,60,96,4,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,6,30,46,32],"prof":[[0.15,-1.1],[0.275,-6.1],[0.425,-8.8],[0.625,-11],[0.875,-19.2],[1.25,-42.1],[2,-58.4]]},{"id":"kitty","name":"Kitty Coleman","lat":49.789,"lon":-124.996,"normal":52,"fetch":[27,23,42,29,22,28,30,26,35,27,27,41,62,99,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,28,42,44],"prof":[[0.15,-0.5],[0.275,-4.6],[0.425,-5.3],[0.625,-8.4],[0.875,-31.1],[1.25,-32.9],[2,-71.3]]},{"id":"williams","name":"Williams Beach","lat":49.835,"lon":-125.059,"normal":42,"fetch":[26,28,28,19,28,28,28,31,35,39,32,34,75,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,7,40,21,35],"prof":[[0.275,-1.5],[0.425,-4],[0.625,-9.8],[0.875,-8.8],[1.25,-65.6],[2,-87.5]]}];
 const G = 9.81, D2R = Math.PI/180;
 const angDiff = (a,b) => { const d = ((a-b)%360+540)%360-180; return d; };
 function movePt(lat, lon, brg, km){ return [lat+Math.cos(brg*D2R)*km/111.32, lon+Math.sin(brg*D2R)*km/(111.32*Math.cos(lat*D2R))]; }
@@ -1021,25 +1022,42 @@ function breakInfo(sp, Hb, T, eta){
 }
 function surfSeries(sp, wind, tide){
   // wind: {t:[unix], u:[m/s], d:[deg from]} hourly incl. 24 h history; returns per forecast hour 0..HOURS
-  const out = []; let seaH=0, seaT=0, seaD=0, lastIdx=-1;
+  const out = []; let seaH=0, seaT=0, seaD=0, seaTh=0;
   const iNow = wind.t.findIndex(t => t >= +t0/1000);
   for(let i=0;i<wind.t.length;i++){
     const U = wind.u[i], D = wind.d[i];
     let hrs = 1; for(let k=i-1;k>=0 && hrs<24;k--){ if(Math.abs(angDiff(wind.d[k],D))<=30 && wind.u[k]>=0.5*U) hrs++; else break; }
     // spread the sea over ±60° with cos² weights; each sub-direction uses its own fetch
-    let eDeep=0, eShore=0, wsum=0, tBest=0, wBest=0;
+    let eDeep=0, eShore=0, wsum=0, tBest=0, wBest=0, thSum=0;
+    const wrap = sp.wrap || 0;
     for(let a=-60;a<=60;a+=10){ const w = Math.pow(Math.cos(a*D2R),2), dir = D+a; const [H,T] = growth(U, radialFetch(sp,dir), hrs);
-      wsum += w; eDeep += w*H*H; const th = angDiff(dir, sp.normal); const c = Math.cos(th*D2R);
-      if(c>0){ eShore += w*H*H*c; if(w*H*H*c > wBest){ wBest = w*H*H*c; tBest = T; } } }
-    const Hshore = Math.sqrt(eShore/wsum), Tg = tBest;
+      wsum += w; eDeep += w*H*H; const th = angDiff(dir, sp.normal); const c = Math.cos(Math.max(0, Math.abs(th)-wrap)*D2R);
+      if(c>0 && Math.abs(th) < 90+wrap){ const e = w*H*H*c; eShore += e; thSum += e*th; if(e > wBest){ wBest = e; tBest = T; } } }
+    const Hshore = Math.sqrt(eShore/wsum), Tg = tBest, thNow = eShore>0 ? thSum/eShore : 0;
     // persistence: once the wind eases, waves already crossing the strait keep arriving (~4 h e-folding)
-    if(i>0){ const decay = Math.exp(-1/4); if(Hshore < seaH*decay){ seaH *= decay; seaT *= 0.985; } else { seaH = Hshore; seaT = Tg; seaD = D; } }
-    else { seaH = Hshore; seaT = Tg; seaD = D; }
+    if(i>0){ const decay = Math.exp(-1/4); if(Hshore < seaH*decay){ seaH *= decay; seaT *= 0.985; } else { seaH = Hshore; seaT = Tg; seaD = D; seaTh = thNow; } }
+    else { seaH = Hshore; seaT = Tg; seaD = D; seaTh = thNow; }
     if(iNow<0 || i < iNow || out.length > HOURS) continue;
     const t = wind.t[i]*1000;
     const eta = tide ? (interp(tide.ser, t) ?? 2.5) : 2.5;
     const Hb = seaH>0.05 && seaT>0 ? 0.39*Math.pow(G,0.2)*Math.pow(seaT*seaH*seaH, 0.4) : 0;
     const bi = breakInfo(sp, Hb, seaT, eta);
+    // angle of the wave crest to the beach at the break point (Snell refraction from deep water)
+    const C0 = G*seaT/(2*Math.PI), Cb = Math.sqrt(G*Math.max(0.2, Hb/0.78));
+    const th0 = Math.max(-89, Math.min(89, seaTh));
+    const thB = Math.asin(Math.min(1, Math.abs(Math.sin(th0*D2R))*Cb/Math.max(C0,0.5)))/D2R;
+    const travel = (seaD+180)%360, peelTo = Math.abs(angDiff(travel, sp.normal+90)) < 90 ? (sp.normal+90)%360 : (sp.normal+270)%360;
+    const hand = Math.abs(angDiff(peelTo, (sp.normal+270)%360)) < 1 ? "Rights" : "Lefts";
+    let shape, peelQ;
+    if(sp.kind==="point"){
+      shape = "point";
+      peelQ = Math.abs(th0) >= 20 ? 1.25 : 0.5;                       // point defines the take-off; swell wrapping in peels best
+    } else if(thB < 4){ shape = "closeout"; peelQ = -1.25; }
+    else if(thB < 8){ shape = "mostly closing"; peelQ = -0.5; }
+    else if(thB <= 22){ shape = "peeling"; peelQ = 0.75; }
+    else if(thB <= 35){ shape = "fast peel"; peelQ = 0.4; }
+    else { shape = "sectiony"; peelQ = 0; }
+    if(sp.kind==="point" && bi.type==="shorebreak") bi.type = "point break";
     // wind quality at the spot
     const kt = U*MS2KT, rel = Math.abs(angDiff(D, sp.normal));
     const state = kt < 5 ? "glassy" : rel < 45 ? "onshore" : rel > 135 ? "offshore" : "cross-shore";
@@ -1048,13 +1066,16 @@ function surfSeries(sp, wind, tide){
     let q = 0;
     if(seaT >= 6) q += 0.5; else if(seaT < 4) q -= 0.5;
     if(bi.type==="plunging") q += 0.25; else if(bi.type==="shorebreak") q -= 0.75;
+    q += peelQ;
+    if((shape==="closeout"||shape==="mostly closing") && state==="onshore" && kt>12) q -= 0.5; // wind closes it out faster
     if(bi.width > 250) q -= 0.5;
     if(state==="onshore") q -= kt>28?3 : kt>20?2 : kt>12?1 : kt>6?0.5 : 0;
     else if(state==="cross-shore") q -= kt>25?2 : kt>18?1.25 : kt>12?0.6 : kt>8?0.25 : 0;
     else if(state==="offshore") q += kt<20 ? 0.5 : -0.5;
     else q += 0.5;
-    const stars = size<=0 ? 0 : Math.max(0, Math.min(5, size + q));
-    out.push({t, Hb, ft:Hb*3.281, T:seaT, dir:seaD, kt, wdir:D, state, eta, stars, ...bi});
+    const cap = kt > 30 ? 2.5 : kt > 25 ? 3.25 : kt > 20 ? 4.25 : 5;   // strong wind = blown out, however big
+    const stars = size<=0 ? 0 : Math.max(0, Math.min(cap, size + q));
+    out.push({t, Hb, ft:Hb*3.281, T:seaT, dir:seaD, kt, wdir:D, state, eta, stars, ...bi, shape, thB, th0, hand, peelTo});
   }
   return out;
 }
@@ -1095,25 +1116,29 @@ function openSurf(sp){
   const S = d.series; const sh = $("#sheet");
   // best windows: consecutive hours ≥ 2.5 stars
   const wins=[]; let cur=null; S.forEach((r,i)=>{ if(r.stars>=2.5){ if(!cur) cur={a:i,b:i,best:r}; else { cur.b=i; if(r.stars>cur.best.stars) cur.best=r; } } else if(cur){ wins.push(cur); cur=null; } }); if(cur) wins.push(cur);
-  let hdr="<tr><th class='rowlab'>Local</th>", rS="<tr><td class='rowlab'>Surf</td>", rR="<tr><td class='rowlab'>Rating</td>", rT="<tr><td class='rowlab'>Period</td>", rW="<tr><td class='rowlab'>Wind</td>", rX="<tr><td class='rowlab'>Tide m</td>";
+  let hdr="<tr><th class='rowlab'>Local</th>", rS="<tr><td class='rowlab'>Surf</td>", rR="<tr><td class='rowlab'>Rating</td>", rT="<tr><td class='rowlab'>Period</td>", rW="<tr><td class='rowlab'>Wind</td>", rX="<tr><td class='rowlab'>Tide m</td>", rP="<tr><td class='rowlab'>Shape</td>";
   S.forEach((r,i)=>{ const dt=new Date(r.t), cls=(localHour(dt)===0?"d ":"")+(i===tIdx?"now":"");
     hdr += `<th class="${localHour(dt)===0?'d':''}">${localHour(dt)===0? fmtDay(dt).split(" ")[0] : fmtTime(dt,{hour:"numeric"}).replace(/\s?[ap]\.?m\.?/i,m=>m.trim()[0].toLowerCase())}</th>`;
     rS += `<td class="${cls}" style="background:${starColor(r.stars)};color:#fff;font-weight:700">${r.ft<0.8?"–":r.ft.toFixed(1)}</td>`;
     rR += `<td class="${cls}" style="color:${starColor(r.stars)};font-weight:700">${r.stars>=0.5?Math.round(r.stars):""}</td>`;
     rT += `<td class="${cls}" style="color:#9fb3c1">${r.T>0.5?Math.round(r.T):"–"}</td>`;
     rW += `<td class="${cls}" title="${r.state}">${arrowSVG((r.wdir+180)%360, r.state==="offshore"?"#9ccc65":r.state==="onshore"?"#ef9a9a":"#cfe3f3",14)}<br>${Math.round(r.kt)}</td>`;
-    rX += `<td class="${cls}" style="color:#7fb6d3">${r.eta.toFixed(1)}</td>`; });
+    rX += `<td class="${cls}" style="color:#7fb6d3">${r.eta.toFixed(1)}</td>`;
+    const sym = r.ft<0.8 ? "" : r.shape==="closeout" ? "▬" : r.shape==="mostly closing" ? "▭" : r.shape==="point" ? "◣" : (r.hand==="Rights" ? "↗" : "↖");
+    rP += `<td class="${cls}" title="${r.shape}" style="color:${r.shape==="closeout"?"#ef9a9a":r.shape==="mostly closing"?"#ffcc80":"#c5e1a5"}">${sym}</td>`; });
   const now = S[tIdx];
   const fmtWin = w => `<div><span><b>${fmtTime(new Date(S[w.a].t),{weekday:"short",hour:"numeric"})}</b> – ${fmtTime(new Date(S[w.b].t+3600e3),{hour:"numeric"})}</span><span style="color:${starColor(w.best.stars)}">${ftRange(w.best.ft)} ${starStr(w.best.stars)}</span></div>`;
   const seF = Math.round(radialFetch(sp, 130)), eF = Math.round(radialFetch(sp, 90));
   sh.innerHTML = sheetHead(sp.name, `Experimental surf estimate · faces ${compass(sp.normal)} (${sp.normal}°)`) +
     `<div class="kv"><div><span>At ${fmtTime(curTime(),{weekday:"short",hour:"numeric"})}</span><b style="color:${starColor(now.stars)}">${ftRange(now.ft)}</b><span>${starStr(now.stars)} · ${now.T>0.5?now.T.toFixed(0)+" s":""} ${now.type}</span></div>
+      <div><span>Wave shape</span><b style="font-size:16px">${now.ft<0.8 ? "–" : now.shape==="point" ? now.hand+" off the point" : now.shape==="closeout"||now.shape==="mostly closing" ? now.shape : now.hand+", "+now.shape}</b><span>${now.ft<0.8 ? "" : `breaks ${Math.round(now.thB)}° to the beach · peels toward ${compass(now.peelTo)}`}</span></div>
+      <div><span>Spot type</span><b style="font-size:16px">${sp.kind==="point"?"Point break":"Beach break"}</b><span>${sp.kind==="point"?"swell wraps ~"+sp.wrap+"° around the point":"needs swell at an angle to peel"}</span></div>
       <div><span>Wind at spot</span><b>${Math.round(now.kt)} kn</b><span>${compass(now.wdir)} · ${now.state}</span></div>
       <div><span>Tide (${d.tideName||"nearest"})</span><b>${now.eta.toFixed(1)} m</b><span>surf zone ~${Math.round(now.width)} m wide</span></div>
       <div><span>Exposure</span><b style="font-size:16px">SE ${seF} km · E ${eF} km</b><span>open-water fetch</span></div></div>
-     <div class="sec-t">Next 48 h · surf face height (ft)</div><div class="strip"><table>${hdr}</tr>${rS}</tr>${rR}</tr>${rT}</tr>${rW}</tr>${rX}</tr></table></div>
+     <div class="sec-t">Next 48 h · surf face height (ft)</div><div class="strip"><table>${hdr}</tr>${rS}</tr>${rR}</tr>${rP}</tr>${rT}</tr>${rW}</tr>${rX}</tr></table></div>
      <div class="sec-t">Best windows (≥ 3★)</div><div class="ev">${wins.length? wins.slice(0,6).map(fmtWin).join("") : "<div class='s'>Nothing rideable forecast in the next 48 h</div>"}</div>
-     <div class="muted" style="padding-top:10px;line-height:1.5"><b>Experimental, not calibrated.</b> Built from forecast wind (ECCC HRDPS), the spot's open-water fetch, how long the wind has blown, the CHS tide, and CHS NONNA seabed depths. It doesn't know about sandbars, kelp, rocks or local quirks – please compare with what you actually see so it can be tuned.</div>`;
+     <div class="muted" style="padding-top:10px;line-height:1.5"><b>Experimental, not calibrated.</b> Built from forecast wind (ECCC HRDPS), the spot's open-water fetch, how long the wind has blown, the CHS tide, and CHS NONNA seabed depths. Wave shape: ▬ closeout, ▭ mostly closing, ↗/↖ peeling right/left, ◣ point. It doesn't know about sandbars, kelp, rocks or local quirks – please compare with what you actually see so it can be tuned.</div>`;
   sh.classList.add("open"); sh.scrollTop=0;
   const st = sh.querySelector(".strip"), nc = st?.querySelector("td.now"); if(nc) st.scrollLeft = Math.max(0, nc.offsetLeft-80);
 }
