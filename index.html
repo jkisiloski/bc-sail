@@ -237,7 +237,7 @@ const TEMP_STOPS = [[4,[70,45,150]],[6,[50,95,195]],[8,[40,160,205]],[10,[65,190
 const STYLES = {
   wind:   {stops:WIND_STOPS, min:0, max:40, alpha:85,  k:0.16, div:170, lw:1.3, unit:"kt", particles:true},
   current:{stops:CUR_STOPS,  min:0, max:6,  alpha:150, k:2.2,  div:140, lw:1.6, unit:"kt", particles:true, minMag:0.04},
-  waves:  {stops:WAVE_STOPS, min:0, max:4,  alpha:165, k:0.55, div:230, lw:1.9, unit:"m",  particles:true, minMag:0.05},
+  waves:  {stops:WAVE_STOPS, min:0, max:4,  alpha:150, k:0.18, div:700, lw:1.9, unit:"m",  particles:true, minMag:0.05},
   temp:   {stops:TEMP_STOPS, min:4, max:16, alpha:175, unit:"°C", particles:false}
 };
 const rgb = c => `rgb(${c[0]},${c[1]},${c[2]})`;
@@ -296,7 +296,7 @@ function currentModel(){
 }
 function modelFor(layer){
   if(layer==="wind"||layer==="gust") return {m:"wind", mk: layer==="gust"?"windg":"wind"};
-  if(layer==="waves") return {m:"waves", mk:"waves"};
+  if(layer==="waves") return {m:"waves", mk: currentModel()==="curS" ? "wavesS" : "waves"};
   const cm = currentModel();
   if(layer==="temp"){ const m = cm==="curS"?"tempS":"tempW"; return {m, mk:m}; }
   return {m:cm, mk:cm};
@@ -323,7 +323,8 @@ function loadField(layer, time){
     if(g.b) jobs.push(wcs(g.b, box, time)); else jobs.push(null);
     if(g.c) jobs.push(wcs(g.c, box, time)); else jobs.push(null);
     if(req.gust) jobs.push(wcs(GRIDS.gust.a, box, time)); else jobs.push(null);
-    const [A,B,C,G] = await Promise.all(jobs);
+    const maskP = g.kind==="waves" ? loadMask(box) : Promise.resolve(null);
+    const [A,B,C,G] = await Promise.all(jobs); const mask = await maskP;
     const n = A.w*A.h, u = new Float32Array(n), v = new Float32Array(n), mag = new Float32Array(n);
     let per = null;
     if(g.kind==="spd-dir"){
@@ -340,21 +341,40 @@ function loadField(layer, time){
       for(let i=0;i<n;i++){ const k=A.data[i]; if(!(k>250&&k<320)){ u[i]=v[i]=mag[i]=NaN; continue; } u[i]=v[i]=0; mag[i]=k-273.15; }
     }
     const type = g.kind==="spd-dir" ? "wind" : g.kind==="uv" ? "current" : g.kind;
-    return {w:A.w, h:A.h, west:A.west, east:A.east, south:A.south, north:A.north, u, v, mag, per, type, mk:req.mk, name:g.name};
+    return {w:A.w, h:A.h, west:A.west, east:A.east, south:A.south, north:A.north, u, v, mag, per, mask, type, mk:req.mk + (mask?"":""), name:g.name};
   })().catch(e=>{ gridCache.delete(key); throw e; });
   gridCache.set(key, p);
   if(gridCache.size>40){ const k0 = gridCache.keys().next().value; gridCache.delete(k0); }
   return p;
 }
+const maskCache = new Map();
+function loadMask(box){ // 1 = water, 0 = land; uses the finest CIOPS grid for the area
+  const m = currentModel()==="curS" ? "tempS" : "tempW", g = GRIDS[m];
+  const mb = clipBox(box, g.box); if(mb.n<=mb.s || mb.e<=mb.w) return Promise.resolve(null);
+  const key = `${m}|${mb.s},${mb.n},${mb.w},${mb.e}`;
+  if(maskCache.has(key)) return maskCache.get(key);
+  const p = wcs(g.a, mb, new Date(+t0+3600e3)).then(A=>{
+    const d = new Uint8Array(A.w*A.h); for(let i=0;i<d.length;i++) d[i] = (A.data[i]>250 && A.data[i]<320) ? 1 : 0;
+    return {w:A.w, h:A.h, west:A.west, east:A.east, south:A.south, north:A.north, d};
+  }).catch(()=>{ maskCache.delete(key); return null; });
+  maskCache.set(key, p); if(maskCache.size>12) maskCache.delete(maskCache.keys().next().value);
+  return p;
+}
+function isWater(mk, lat, lon){
+  const x = Math.floor((lon-mk.west)/(mk.east-mk.west)*mk.w), y = Math.floor((mk.north-lat)/(mk.north-mk.south)*mk.h);
+  if(x<0||y<0||x>=mk.w||y>=mk.h) return true; // outside mask: trust the wave model
+  return mk.d[y*mk.w+x]===1;
+}
 function viewInsideField(){ const v=viewBox(0); return field && v.s>=field.south && v.n<=field.north && v.w>=field.west && v.e<=field.east && field.mk===modelFor(activeKey).mk; }
 function sampleField(f, lat, lon){
   const fx = (lon - f.west)/(f.east - f.west)*f.w - 0.5, fy = (f.north - lat)/(f.north - f.south)*f.h - 0.5;
   if(fx<0||fy<0||fx>=f.w-1||fy>=f.h-1) return null;
+  if(f.mask && !isWater(f.mask, lat, lon)) return null;
   const x0=fx|0, y0=fy|0, ax=fx-x0, ay=fy-y0, i=y0*f.w+x0;
   const ids = [i, i+1, i+f.w, i+f.w+1], ws = [(1-ax)*(1-ay), ax*(1-ay), (1-ax)*ay, ax*ay];
   let sw=0, su=0, sv=0, sm=0, sp=0;
   for(let j=0;j<4;j++){ const m = f.mag[ids[j]]; if(m!==m) continue; const wj=ws[j]; sw+=wj; su+=wj*f.u[ids[j]]; sv+=wj*f.v[ids[j]]; sm+=wj*m; if(f.per) sp+=wj*f.per[ids[j]]; }
-  if(sw<0.35) return null;
+  if(sw < (f.mask ? 0.05 : 0.35)) return null;
   return [su/sw, sv/sw, sm/sw, f.per? sp/sw : null];
 }
 
@@ -398,13 +418,20 @@ function seedParticles(){
   const n = Math.min(3200, Math.round(W*H/st.div));
   particles = new Array(n); for(let i=0;i<n;i++) particles[i] = newParticle(true);
 }
-function newParticle(rand){ return {x:Math.random()*W, y:Math.random()*H, age: rand?Math.floor(Math.random()*80):0, max: 50+Math.floor(Math.random()*60)}; }
+function newParticle(rand){
+  if(field && field.type==="waves"){ // spawn crests on water only
+    for(let t=0;t<8;t++){ const x=Math.random()*W, y=Math.random()*H, s=sampleField(field, latOfY[y|0], lonW+x*lonPerPx);
+      if(s && s[2]>=0.05) return {x, y, age: rand?Math.floor(Math.random()*90):0, max: 70+Math.floor(Math.random()*50)}; }
+  }
+  return {x:Math.random()*W, y:Math.random()*H, age: rand?Math.floor(Math.random()*80):0, max: 50+Math.floor(Math.random()*60)};
+}
 const NB = 10;
 let lastFrame = 0;
 function frame(ts){
   requestAnimationFrame(frame);
   if(!running || moving || !field || document.hidden || !$("#tFlow").checked) return;
   if(ts-lastFrame < 30) return; lastFrame = ts;
+  if(field.type==="waves"){ drawWaveCrests(); return; }
   pctx.globalCompositeOperation = "destination-in"; pctx.fillStyle = "rgba(0,0,0,0.90)"; pctx.fillRect(0,0,W,H);
   pctx.globalCompositeOperation = "source-over";
   const st = STYLES[field.type]; if(!st.particles) return;
@@ -424,6 +451,31 @@ function frame(ts){
   }
   pctx.lineWidth = st.lw; pctx.lineCap="round";
   for(let b=0;b<NB;b++){ const c = ramp(stops, (b+0.5)/NB*maxV); pctx.strokeStyle = `rgba(${Math.min(255,c[0]+60)},${Math.min(255,c[1]+60)},${Math.min(255,c[2]+60)},0.92)`; pctx.stroke(paths[b]); }
+}
+function drawWaveCrests(){
+  pctx.clearRect(0,0,W,H);
+  const st = STYLES.waves, NA = 3;
+  const paths = Array.from({length:NB*NA},()=>new Path2D());
+  for(let i=0;i<particles.length;i++){
+    const p = particles[i];
+    if(p.age++ > p.max){ particles[i] = newParticle(false); continue; }
+    const yi = p.y|0; if(yi<0||yi>H){ particles[i]=newParticle(false); continue; }
+    const s = sampleField(field, latOfY[yi], lonW + p.x*lonPerPx);
+    if(!s || s[2]<0.05){ particles[i]=newParticle(false); continue; }
+    const sp = Math.hypot(s[0],s[1])||1, ux = s[0]/sp, uy = -s[1]/sp;   // travel direction (screen)
+    const L = Math.min(15, 5 + s[2]*4);                                    // half crest length ∝ wave height
+    const px = -uy, py = ux;                                               // perpendicular = crest line
+    const ax = p.x - px*L, ay = p.y - py*L, bx = p.x + px*L, by = p.y + py*L;
+    const cx = p.x + ux*L*0.25, cy = p.y + uy*L*0.25;                       // bulge forward like a breaking crest
+    const life = Math.min(1, p.age/p.max), a = Math.max(0, Math.min(NA-1, Math.floor(Math.sin(Math.PI*life)*NA)));
+    const b = Math.max(0, Math.min(NB-1, Math.floor(s[2]/st.max*NB))) || 0;
+    const path = paths[b*NA+a]; path.moveTo(ax,ay); path.quadraticCurveTo(cx,cy,bx,by);
+    p.x += s[0]*0.18; p.y -= s[1]*0.18;
+    if(p.x<0||p.y<0||p.x>W||p.y>H) particles[i]=newParticle(false);
+  }
+  pctx.lineCap="round";
+  for(let b=0;b<NB;b++){ const c = ramp(st.stops, (b+0.5)/NB*st.max), lw = 1.6 + b*0.12;
+    for(let a=0;a<NA;a++){ pctx.lineWidth = lw; pctx.strokeStyle = `rgba(${Math.min(255,c[0]+90)},${Math.min(255,c[1]+90)},${Math.min(255,c[2]+90)},${[0.25,0.6,0.95][a]})`; pctx.stroke(paths[b*NA+a]); } }
 }
 requestAnimationFrame(frame);
 function clearFlow(){ pctx.clearRect(0,0,W,H); }
