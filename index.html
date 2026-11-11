@@ -3,48 +3,85 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0b1d2e">
+<meta name="theme-color" content="#0a0f14">
 <title>BC Sail</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
-  :root{--bg:#0b1d2e;--panel:#10283e;--line:#1f3d58;--txt:#e8f0f7;--mut:#8fa7bd;--acc:#4fc3f7;--ok:#4caf50;--warn:#ffb300;--bad:#ef5350}
+  :root{--bg:#0a0f14;--panel:rgba(18,24,30,.94);--panel2:#151c23;--line:rgba(255,255,255,.09);--txt:#eef3f6;--mut:#8e9aa5;--acc:#9ccc65;--acc2:#5f7f45;--ok:#66bb6a;--warn:#ffb300;--bad:#ef5350}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font:14px/1.35 system-ui,-apple-system,Roboto,sans-serif;overflow:hidden}
-  #map{position:absolute;inset:0;background:#aad3df}
-  .top{position:absolute;top:0;left:0;right:0;z-index:1000;padding:calc(env(safe-area-inset-top) + 8px) 8px 0;display:flex;gap:6px;flex-wrap:wrap;pointer-events:none}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font:14px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+  #map{position:absolute;inset:0;background:#0b1620}
+  .leaflet-container{background:#0b1620}
+  /* top */
+  .top{position:absolute;top:0;left:0;right:0;z-index:1000;padding:calc(env(safe-area-inset-top) + 10px) 10px 0;display:flex;gap:8px;align-items:stretch;pointer-events:none}
   .top>*{pointer-events:auto}
-  .seg{display:flex;background:rgba(16,40,62,.92);border:1px solid var(--line);border-radius:10px;overflow:hidden}
-  .seg button{background:none;border:0;color:var(--mut);padding:9px 11px;font:600 13px system-ui;cursor:pointer}
-  .seg button.on{background:var(--acc);color:#04121f}
-  .chip{display:flex;align-items:center;gap:6px;background:rgba(16,40,62,.92);border:1px solid var(--line);border-radius:10px;padding:0 10px;color:var(--mut);font-size:12px;cursor:pointer;min-height:36px}
-  .chip input{margin:0}
-  #status{margin-left:auto;display:flex;gap:4px}
-  .dot{width:9px;height:9px;border-radius:50%;background:#555;display:inline-block}
+  .seg{display:flex;flex:1;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;backdrop-filter:blur(8px)}
+  .seg button{flex:1;background:none;border:0;color:var(--mut);padding:11px 4px;font:600 14px system-ui;cursor:pointer}
+  .seg button.on{background:linear-gradient(#6f8f55,#56743f);color:#fff}
+  .sq{width:46px;flex:none;background:var(--panel);border:1px solid var(--line);border-radius:12px;color:var(--txt);font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative}
+  .sq .dots{position:absolute;bottom:5px;display:flex;gap:3px}
+  .dot{width:6px;height:6px;border-radius:50%;background:#555;display:inline-block}
   .dot.ok{background:var(--ok)}.dot.load{background:var(--warn);animation:p 1s infinite}.dot.bad{background:var(--bad)}.dot.stale{background:#ff8a65}
   @keyframes p{50%{opacity:.3}}
-  #legend{position:absolute;right:8px;top:calc(env(safe-area-inset-top) + 96px);z-index:900;background:rgba(255,255,255,.88);border-radius:8px;padding:4px;max-height:45vh;overflow:hidden}
-  #legend img{display:block;max-height:44vh}
-  .bottom{position:absolute;left:0;right:0;bottom:0;z-index:1000;padding:8px 8px calc(env(safe-area-inset-bottom) + 8px);background:linear-gradient(transparent,rgba(11,29,46,.9) 30%)}
-  .timebar{display:flex;align-items:center;gap:8px;background:rgba(16,40,62,.95);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
-  .timebar button{background:var(--acc);border:0;border-radius:8px;width:38px;height:38px;font-size:16px;color:#04121f;flex:none}
-  .timebar button.sec{background:#1f3d58;color:var(--txt)}
-  #tlabel{min-width:92px;font-weight:700;font-size:13px;text-align:center}
-  #tlabel small{display:block;font-weight:400;color:var(--mut);font-size:11px}
-  input[type=range]{flex:1;accent-color:var(--acc);height:30px}
-  #note{font-size:11px;color:var(--warn);text-align:center;min-height:0;margin-top:4px}
-  .fab{position:absolute;right:10px;z-index:1000;bottom:calc(env(safe-area-inset-bottom) + 84px);display:flex;flex-direction:column;gap:8px}
-  .fab button{width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:rgba(16,40,62,.95);color:var(--txt);font-size:18px}
+  .row2{position:absolute;z-index:1000;top:calc(env(safe-area-inset-top) + 66px);left:10px;display:flex;gap:8px;align-items:center;pointer-events:none}
+  .pill{pointer-events:auto;display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 12px;font:600 13px system-ui}
+  .pill .ldot{width:9px;height:9px;border-radius:50%;background:#d4b13a}
+  #scale{pointer-events:none;display:flex;flex-direction:column;gap:3px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px 8px}
+  #scale .bar{height:6px;width:150px;border-radius:3px}
+  #scale .lbl{display:flex;justify-content:space-between;font-size:10px;color:var(--mut)}
+  #legendImg{background:rgba(255,255,255,.9);border-radius:8px;max-height:38vh;display:block}
+  #menu{position:absolute;z-index:1100;top:calc(env(safe-area-inset-top) + 66px);right:10px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px;display:none;min-width:220px}
+  #menu.open{display:block}
+  #menu label{display:flex;align-items:center;gap:10px;padding:10px;font-size:14px}
+  #menu input{width:18px;height:18px;accent-color:#7cb342}
+  #menu .st{border-top:1px solid var(--line);margin-top:4px;padding:8px 10px 4px;font-size:12px;color:var(--mut);display:grid;grid-template-columns:auto 1fr;gap:6px 8px;align-items:center}
+  /* crosshair */
+  #cross{position:absolute;left:50%;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;z-index:600;pointer-events:none;opacity:.75}
+  /* fab */
+  .fab{position:absolute;right:10px;z-index:1000;bottom:calc(env(safe-area-inset-bottom) + 215px);display:flex;flex-direction:column;gap:10px}
+  .fab button{width:48px;height:48px;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--txt);font-size:20px}
+  /* bottom timeline */
+  .bottom{position:absolute;left:0;right:0;bottom:0;z-index:1000;background:var(--panel);border-top:1px solid var(--line);border-radius:16px 16px 0 0;padding:6px 10px calc(env(safe-area-inset-bottom) + 10px);backdrop-filter:blur(10px)}
+  .grab{width:38px;height:4px;border-radius:2px;background:#3a444d;margin:0 auto 8px}
+  .tl-top{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .tl-top button{background:#1d262e;border:1px solid var(--line);color:var(--txt);border-radius:10px;height:44px;min-width:44px;font:600 14px system-ui;padding:0 12px}
+  .tl-top button.now{color:#8fd3ff}
+  .sum{flex:1;min-width:0}
+  .sum b{display:block;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sum small{color:var(--mut);font-size:12px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .strip2{position:relative;height:30px;border-radius:6px;overflow:visible}
+  #bars{display:flex;height:100%;border-radius:6px;overflow:hidden;background:#1d262e}
+  #bars div{flex:1;display:flex;align-items:center;justify-content:center;font:700 11px system-ui;color:#fff;text-shadow:0 0 2px rgba(0,0,0,.7);overflow:visible;white-space:nowrap}
+  #slider{position:absolute;inset:-8px 0;width:100%;height:46px;margin:0;-webkit-appearance:none;appearance:none;background:transparent}
+  #slider::-webkit-slider-runnable-track{background:transparent;height:46px}
+  #slider::-webkit-slider-thumb{-webkit-appearance:none;width:30px;height:30px;margin-top:8px;border-radius:50%;background:#fff;border:3px solid #1d262e;box-shadow:0 0 0 2px #fff,0 2px 8px rgba(0,0,0,.6)}
+  #slider::-moz-range-thumb{width:26px;height:26px;border-radius:50%;background:#fff;border:3px solid #1d262e}
+  #days{position:relative;height:18px;margin-top:4px;font:600 11px system-ui;color:var(--mut)}
+  #days span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+  #days span.d{color:var(--txt)}
+  #tideRow{position:relative;height:40px;margin-top:6px;border-radius:6px;background:#141b21;overflow:hidden}
+  #tideRow svg{position:absolute;inset:0;width:100%;height:100%}
+  #tideRow .tv{position:absolute;transform:translateX(-50%);font:700 10px system-ui;color:#cfe7f5;text-shadow:0 0 3px #000;pointer-events:none}
+  #tideRow .tv.lo{color:#9fb3c1}
+  #tideRow .tlab{position:absolute;right:6px;bottom:3px;font:600 10px system-ui;color:#7fb6d3;background:rgba(20,27,33,.7);padding:0 3px;border-radius:3px}
+  #sumTide{color:#9fd3ef!important}
+  #sumTide .tst{color:var(--mut)}
+  .tw{color:#4fc3f7;font-size:10px}
+  .tide{display:flex;align-items:center;gap:2px;font:700 11px system-ui;color:#d9f1ff;background:rgba(15,40,58,.85);border:1px solid #2b6c8f;border-radius:7px;padding:1px 5px;white-space:nowrap;width:max-content}
+  .tide small{font-weight:500;color:#8fb7cc;margin-left:1px}
+  .tide.dim{opacity:.6}
+  #note{font-size:11px;color:var(--warn);text-align:center;margin-top:2px;min-height:0}
   /* sheet */
-  #sheet{position:absolute;left:0;right:0;bottom:0;z-index:2000;background:var(--panel);border-top:1px solid var(--line);border-radius:16px 16px 0 0;max-height:72vh;overflow:auto;transform:translateY(105%);transition:transform .25s;padding:6px 0 calc(env(safe-area-inset-bottom) + 12px);box-shadow:0 -8px 30px rgba(0,0,0,.45)}
+  #sheet{position:absolute;left:0;right:0;bottom:0;z-index:2000;background:var(--panel2);border-top:1px solid var(--line);border-radius:16px 16px 0 0;max-height:74vh;overflow:auto;transform:translateY(105%);transition:transform .25s;padding:6px 0 calc(env(safe-area-inset-bottom) + 12px);box-shadow:0 -8px 30px rgba(0,0,0,.55)}
   #sheet.open{transform:none}
-  .sh-head{display:flex;align-items:flex-start;gap:8px;padding:6px 14px 8px;position:sticky;top:-6px;background:var(--panel);z-index:2}
-  .sh-head h2{font-size:16px;margin:2px 0 0;flex:1}
+  .sh-head{display:flex;align-items:flex-start;gap:8px;padding:8px 14px;position:sticky;top:-6px;background:var(--panel2);z-index:2}
+  .sh-head h2{font-size:17px;margin:2px 0 0;flex:1}
   .sh-head small{color:var(--mut);font-weight:400;display:block;font-size:12px}
-  .x{background:#1f3d58;border:0;color:var(--txt);border-radius:8px;width:34px;height:34px;font-size:16px}
-  .sec-t{padding:8px 14px 4px;color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+  .x{background:#232d36;border:0;color:var(--txt);border-radius:10px;width:36px;height:36px;font-size:16px}
+  .sec-t{padding:10px 14px 4px;color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.07em}
   .strip{overflow-x:auto;padding:0 14px 6px}
   .strip table{border-collapse:collapse;font-size:12px}
   .strip td,.strip th{text-align:center;min-width:34px;padding:3px 1px;white-space:nowrap}
@@ -52,65 +89,79 @@
   .strip .day th{color:var(--txt);text-align:left;font-weight:700;padding-top:2px}
   .strip .day th.d{border-left:2px solid var(--line);padding-left:4px}
   .strip td.d{border-left:2px solid var(--line)}
-  .strip td.now{outline:2px solid var(--acc);outline-offset:-2px}
-  .rowlab{position:sticky;left:-14px;background:var(--panel);color:var(--mut);text-align:left!important;padding-right:6px!important;font-size:11px;min-width:44px!important;z-index:1}
+  .strip td.now{outline:2px solid #fff;outline-offset:-2px}
+  .rowlab{position:sticky;left:-14px;background:var(--panel2);color:var(--mut);text-align:left!important;padding-right:6px!important;font-size:11px;min-width:44px!important;z-index:1}
   .kv{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 14px}
-  .kv div{background:#0d2236;border:1px solid var(--line);border-radius:10px;padding:8px 10px}
-  .kv b{display:block;font-size:20px}
+  .kv div{background:#1b232b;border:1px solid var(--line);border-radius:12px;padding:9px 11px}
+  .kv b{display:block;font-size:21px}
   .kv span{color:var(--mut);font-size:11px}
   .ev{padding:0 14px}
-  .ev div{display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:6px 0}
+  .ev div{display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:7px 0}
   .ev .f{color:#81d4fa}.ev .e{color:#ffcc80}.ev .s{color:var(--mut)}
   .err{color:var(--bad);padding:4px 14px;font-size:12px}
   .muted{color:var(--mut);font-size:12px;padding:2px 14px}
   canvas.spark{width:calc(100% - 28px);margin:0 14px;height:90px;display:block}
   /* markers */
-  .obs{display:flex;align-items:center;gap:2px;white-space:nowrap;font:700 11px system-ui;color:#fff;text-shadow:0 0 3px #000,0 0 3px #000}
-  .obs svg{flex:none}
+  .obs{display:flex;align-items:center;gap:3px;white-space:nowrap;font:700 12px system-ui;color:#fff;text-shadow:0 0 3px #000,0 0 3px #000}
+  .obs .pin{width:9px;height:9px;border-radius:50%;background:#7cb342;border:2px solid #fff;flex:none}
   .cur{font:700 11px system-ui;color:#fff;text-shadow:0 0 3px #000,0 0 3px #000;white-space:nowrap;display:flex;align-items:center;gap:2px}
-  .leaflet-control-attribution{font-size:9px;margin-bottom:calc(env(safe-area-inset-bottom) + 76px)!important}
-  .tapmark{width:14px;height:14px;border:3px solid #fff;border-radius:50%;background:var(--acc);box-shadow:0 0 0 2px #000}
+  .leaflet-control-attribution{font-size:9px;background:rgba(10,15,20,.6)!important;color:#9aa!important}
+  .leaflet-control-attribution a{color:#9cc!important}
+  .leaflet-bottom{bottom:calc(env(safe-area-inset-bottom) + 192px)}
+  .tapmark{width:14px;height:14px;border:3px solid #fff;border-radius:50%;background:#7cb342;box-shadow:0 0 0 2px #000}
+  .flowcv{position:absolute;left:0;top:0;pointer-events:none}
 </style>
 </head>
 <body>
 <div id="map"></div>
+<svg id="cross" viewBox="0 0 22 22"><circle cx="11" cy="11" r="4" fill="none" stroke="#fff" stroke-width="1.5"/><path d="M11 0v6M11 16v6M0 11h6M16 11h6" stroke="#fff" stroke-width="1.5"/></svg>
 
 <div class="top">
   <div class="seg" id="layerSeg">
     <button data-l="wind" class="on">Wind</button>
     <button data-l="gust">Gusts</button>
     <button data-l="current">Current</button>
-    <button data-l="temp">Water °C</button>
-    <button data-l="none">Off</button>
+    <button data-l="temp">Water</button>
   </div>
-  <label class="chip"><input type="checkbox" id="tObs" checked>Obs wind</label>
-  <label class="chip"><input type="checkbox" id="tCur" checked>Tidal stns</label>
-  <label class="chip"><input type="checkbox" id="tSea">Seamarks</label>
-  <div class="chip" id="status" title="Data status: forecast maps / observations / tidal stations">
-    <span class="dot" id="sMap"></span><span class="dot" id="sObs"></span><span class="dot" id="sCur"></span>
-  </div>
+  <div class="sq" id="btnMenu" title="Layers">≡<div class="dots"><span class="dot" id="sMap"></span><span class="dot" id="sObs"></span><span class="dot" id="sCur"></span></div></div>
+</div>
+<div class="row2">
+  <div class="pill" id="modelPill"><span class="ldot"></span><span id="modelName">HRDPS 2.5 km</span></div>
+  <div id="scale"><div class="bar" id="scaleBar"></div><div class="lbl" id="scaleLbl"></div></div>
+  <img id="legendImg" alt="" hidden>
+</div>
+<div id="menu">
+  <label><input type="checkbox" id="tFlow" checked>Animated flow lines</label>
+  <label><input type="checkbox" id="tObs" checked>Observed wind (stations)</label>
+  <label><input type="checkbox" id="tTide" checked>Tide heights (zoom in)</label>
+  <label><input type="checkbox" id="tCur" checked>Tidal current stations</label>
+  <label><input type="checkbox" id="tSea">Seamarks (OpenSeaMap)</label>
+  <div class="st"><span class="dot" id="sMap2"></span><span id="sMapT">Forecast grid</span><span class="dot" id="sObs2"></span><span id="sObsT">Observations</span><span class="dot" id="sCur2"></span><span id="sCurT">Tide &amp; current stations</span></div>
 </div>
 
-<div id="legend" hidden><img id="legendImg" alt="legend"></div>
-
 <div class="fab">
-  <button id="btnLoc" title="My location">◎</button>
+  <button id="btnHome" title="Comox / Little River">⌂</button>
+  <button id="btnLoc" title="My location">➤</button>
   <button id="btnRefresh" title="Refresh data">⟳</button>
 </div>
 
 <div class="bottom">
-  <div class="timebar">
-    <button id="btnPlay">▶</button>
-    <button id="btnNow" class="sec" title="Jump to now">⌂</button>
-    <input type="range" id="slider" min="0" max="47" value="0" step="1">
-    <div id="tlabel">—</div>
+  <div class="grab"></div>
+  <div class="tl-top">
+    <button id="btnPlay" aria-label="Play">▶</button>
+    <div class="sum"><b id="sumMain">—</b><small id="sumSub">Wind at map centre</small><small id="sumTide"></small></div>
+    <button id="btnNow" class="now">Now</button>
   </div>
+  <div class="strip2"><div id="bars"></div><input type="range" id="slider" min="0" max="48" value="0" step="1"></div>
+  <div id="tideRow"></div>
+  <div id="days"></div>
   <div id="note"></div>
 </div>
 
 <div id="sheet"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/geotiff@2.1.3/dist-browser/geotiff.js"></script>
 <script>
 "use strict";
 /* ============ config ============ */
@@ -120,13 +171,9 @@ const IWLS = "https://api-iwls.dfo-mpo.gc.ca/api/v1";
 const OGC = "https://api.weather.gc.ca/collections";
 const KMH2KT = 1/1.852, MS2KT = 1.943844;
 const SALISH = {s:47.0,n:51.0,w:-126.4,e:-122.0}; // approx CIOPS-SalishSea footprint
-const LAYERS = {
-  wind:   {name:"HRDPS-WEonG_2.5km_WindSpeed", style:"WINDSPEEDKNOTS-LINEAR", label:"HRDPS 2.5 km sustained wind (kt)"},
-  gust:   {name:"HRDPS-WEonG_2.5km_WindGust",  style:"GUST_INTERV_MS2KTS",    label:"HRDPS 2.5 km wind gusts (kt)"},
-  current:{name:{salish:"CIOPS-SalishSea_500m_SeaWaterVelocity_0.5m", west:"CIOPS-West_2km_SeaWaterVelocity_0.5m"}, style:"SEA_CURARROW_0MTO100M_SURFACE", label:"CIOPS surface current"},
-  temp:   {name:{salish:"CIOPS-SalishSea_500m_SeaWaterPotentialTemp_0.5m", west:"CIOPS-West_2km_SeaWaterPotentialTemp_0.5m"}, style:"SEA_TEMPSURF-DEFAULT", label:"CIOPS surface water temp"}
-};
+const COAST = {s:47.0,n:56.0,w:-136.0,e:-121.5};
 const HOURS = 48;
+const TEMP = {salish:"CIOPS-SalishSea_500m_SeaWaterPotentialTemp_0.5m", west:"CIOPS-West_2km_SeaWaterPotentialTemp_0.5m", style:"SEA_TEMPSURF-DEFAULT"};
 
 /* ============ small utils ============ */
 const $ = s => document.querySelector(s);
@@ -135,7 +182,7 @@ const ls = {
   get(k){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; }catch(e){ return null; } },
   set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
 };
-async function fetchJSON(url, {timeout=12000, tries=3, text=false}={}){
+async function fetchJSON(url, {timeout=12000, tries=3, text=false, buffer=false}={}){
   let last;
   for(let i=0;i<tries;i++){
     const ctl = new AbortController(); const t = setTimeout(()=>ctl.abort(), timeout);
@@ -144,7 +191,7 @@ async function fetchJSON(url, {timeout=12000, tries=3, text=false}={}){
       clearTimeout(t);
       if(r.status===429){ await sleep(1500*(i+1)); last = new Error("rate limited"); continue; }
       if(!r.ok) throw new Error("HTTP "+r.status);
-      return text ? await r.text() : await r.json();
+      return buffer ? await r.arrayBuffer() : text ? await r.text() : await r.json();
     }catch(e){ clearTimeout(t); last = e; await sleep(600*(i+1)); }
   }
   throw last;
@@ -152,14 +199,24 @@ async function fetchJSON(url, {timeout=12000, tries=3, text=false}={}){
 const fmtTime = (d, o={hour:"numeric"}) => new Intl.DateTimeFormat("en-CA",{timeZone:TZ,...o}).format(d);
 const fmtDay = d => new Intl.DateTimeFormat("en-CA",{timeZone:TZ,weekday:"short",day:"numeric"}).format(d);
 const localDayKey = d => new Intl.DateTimeFormat("en-CA",{timeZone:TZ,year:"numeric",month:"2-digit",day:"2-digit"}).format(d);
+const localHour = d => +new Intl.DateTimeFormat("en-CA",{timeZone:TZ,hour:"numeric",hourCycle:"h23"}).format(d);
 const isoZ = d => d.toISOString().slice(0,19)+"Z";
 const compass = deg => ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"][Math.round(((deg%360)+360)%360/22.5)%16];
-function setDot(id, state, title){ const el=$(id); el.className="dot "+state; if(title) el.title=title; }
-function windColor(kt){ // Windy-like scale
-  const s=[[0,"#6271b7"],[5,"#39a0c9"],[10,"#4aa86a"],[15,"#9ec43b"],[20,"#e8c51f"],[25,"#e88a1f"],[30,"#d6402d"],[35,"#b8235f"],[45,"#7a2b8c"]];
-  let c=s[0][1]; for(const [v,col] of s) if(kt>=v) c=col; return c;
+function setDot(id, state, title){
+  for(const el of [$(id), $(id+"2")]) if(el){ el.className="dot "+state; if(title) el.title=title; }
+  const t = $(id+"T"); if(t && title) t.textContent = title;
 }
-function arrowSVG(deg, color="#fff", size=22){ // arrow pointing toward `deg` (direction of travel)
+/* colour scales */
+function ramp(stops, v){
+  if(v<=stops[0][0]) return stops[0][1];
+  for(let i=1;i<stops.length;i++){ if(v<=stops[i][0]){ const [a,ca]=stops[i-1],[b,cb]=stops[i]; const f=(v-a)/(b-a); return ca.map((c,k)=>Math.round(c+(cb[k]-c)*f)); } }
+  return stops.at(-1)[1];
+}
+const WIND_STOPS = [[0,[70,90,170]],[5,[50,140,200]],[9,[60,170,120]],[13,[140,195,60]],[17,[230,200,40]],[22,[240,140,30]],[27,[220,70,40]],[33,[190,40,90]],[42,[130,40,150]]];
+const CUR_STOPS  = [[0,[40,70,130]],[0.5,[40,120,200]],[1,[40,180,190]],[2,[90,200,110]],[3,[220,210,60]],[4.5,[240,130,40]],[6,[220,50,60]],[8,[170,40,140]]];
+const rgb = c => `rgb(${c[0]},${c[1]},${c[2]})`;
+function windColor(kt){ return rgb(ramp(WIND_STOPS, kt||0)); }
+function arrowSVG(deg, color="#fff", size=22){
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" style="transform:rotate(${deg}deg)"><path d="M12 2 L18 14 L13.2 12.6 L13.2 22 L10.8 22 L10.8 12.6 L6 14 Z" fill="${color}" stroke="#000" stroke-width="1"/></svg>`;
 }
 
@@ -167,61 +224,250 @@ function arrowSVG(deg, color="#fff", size=22){ // arrow pointing toward `deg` (d
 const t0 = (()=>{ const d=new Date(); d.setUTCMinutes(0,0,0); return d; })();
 let tIdx = 0;
 const curTime = () => new Date(+t0 + tIdx*3600e3);
-function updateTimeLabel(){
-  const d = curTime();
-  $("#tlabel").innerHTML = `${fmtTime(d,{weekday:"short",hour:"numeric"})}<small>${tIdx===0?"now":"+"+tIdx+" h"}</small>`;
-}
 
 /* ============ map ============ */
-const map = L.map("map",{zoomControl:false, attributionControl:true, worldCopyJump:false}).setView(ls.get("view")?.c || [49.0,-123.6], ls.get("view")?.z || 8);
-map.on("moveend", ()=>{ ls.set("view",{c:[map.getCenter().lat,map.getCenter().lng], z:map.getZoom()}); maybeSwapModel(); refreshVisibleCurrents(); });
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:17, subdomains:"abc", attribution:"© OpenStreetMap"}).addTo(map);
+const HOME = {c:[49.712,-124.895], z:11}; // Comox harbour – Little River
+const map = L.map("map",{zoomControl:false, attributionControl:true, preferCanvas:false}).setView(HOME.c, HOME.z);
+L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{maxZoom:18, subdomains:"abcd", attribution:"© OpenStreetMap © CARTO"}).addTo(map);
 const seamarks = L.tileLayer("https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png",{maxZoom:17, attribution:"OpenSeaMap", opacity:.9});
-map.createPane("model"); map.getPane("model").style.zIndex = 350;
+map.createPane("flow"); map.getPane("flow").style.zIndex = 300; map.getPane("flow").style.pointerEvents = "none";
+map.createPane("model"); map.getPane("model").style.zIndex = 320;
 map.createPane("marks"); map.getPane("marks").style.zIndex = 650;
+map.attributionControl.addAttribution("ECCC MSC · DFO CHS · Open-Meteo");
 
-let activeKey = "wind", wms = null, wmsLayerName = null, layerExtent = {};
-let tileErrors = 0, tileLoads = 0;
-
-function inSalish(){ const c = map.getCenter(); return c.lat>SALISH.s && c.lat<SALISH.n && c.lng>SALISH.w && c.lng<SALISH.e; }
-function resolveLayerName(key){
-  const n = LAYERS[key].name; if(typeof n==="string") return n;
-  return (inSalish() && map.getZoom()>=8) ? n.salish : n.west;
+/* ============ gridded data (MSC GeoMet WCS → GeoTIFF) ============ */
+const GRIDS = {
+  wind:   {a:"HRDPS-WEonG_2.5km_WindSpeed", b:"HRDPS-WEonG_2.5km_WindDir", kind:"spd-dir", name:"HRDPS 2.5 km", box:COAST},
+  gust:   {a:"HRDPS-WEonG_2.5km_WindGust"},
+  curS:   {a:"CIOPS-SalishSea_500m_SeaWaterVelocityX_0.5m", b:"CIOPS-SalishSea_500m_SeaWaterVelocityY_0.5m", kind:"uv", name:"CIOPS Salish Sea 500 m", box:SALISH},
+  curW:   {a:"CIOPS-West_2km_SeaWaterVelocityX_0.5m", b:"CIOPS-West_2km_SeaWaterVelocityY_0.5m", kind:"uv", name:"CIOPS West 2 km", box:COAST}
+};
+const gridCache = new Map(); // key -> Promise<field|null>
+async function wcs(cov, box, time){
+  const u = `${GEOMET}?service=WCS&version=2.0.1&request=GetCoverage&coverageId=${cov}&format=image/tiff&subset=lat(${box.s.toFixed(3)},${box.n.toFixed(3)})&subset=lon(${box.w.toFixed(3)},${box.e.toFixed(3)})&time=${isoZ(time)}`;
+  const buf = await fetchJSON(u,{buffer:true, timeout:25000, tries:2});
+  const head = new Uint8Array(buf,0,2);
+  if(!((head[0]===73&&head[1]===73)||(head[0]===77&&head[1]===77))) throw new Error("no data for this hour");
+  const tif = await GeoTIFF.fromArrayBuffer(buf); const im = await tif.getImage();
+  const [w,s,e,n] = im.getBoundingBox(); const r = await im.readRasters();
+  return {w:im.getWidth(), h:im.getHeight(), west:w, east:e, south:s, north:n, data:r[0]};
 }
-async function getExtent(name){ // time extent of a layer, cached 30 min
-  const c = layerExtent[name]; if(c && Date.now()-c.at < 30*60e3) return c;
-  try{
-    const xml = await fetchJSON(`${GEOMET}?service=WMS&version=1.3.0&request=GetCapabilities&layer=${name}`,{text:true,timeout:15000});
-    const m = xml.match(/<Dimension name="time"[^>]*>([^<]+)</);
-    if(m){ const [a,b] = m[1].split("/"); layerExtent[name] = {start:new Date(a), end:new Date(b), at:Date.now()}; return layerExtent[name]; }
-  }catch(e){}
+function clipBox(b, lim){ return {s:Math.max(b.s,lim.s), n:Math.min(b.n,lim.n), w:Math.max(b.w,lim.w), e:Math.min(b.e,lim.e)}; }
+function viewBox(pad=0.35){ const b = map.getBounds().pad(pad); return {s:b.getSouth(), n:b.getNorth(), w:b.getWest(), e:b.getEast()}; }
+function roundBox(b, step){ return {s:Math.floor(b.s/step)*step, n:Math.ceil(b.n/step)*step, w:Math.floor(b.w/step)*step, e:Math.ceil(b.e/step)*step}; }
+function boxContains(a,b){ return a.s<=b.s && a.n>=b.n && a.w<=b.w && a.e>=b.e; }
+
+function currentModel(){
+  const c = map.getCenter();
+  return (map.getZoom()>=9 && c.lat>SALISH.s+0.3 && c.lat<SALISH.n-0.3 && c.lng>SALISH.w+0.3 && c.lng<SALISH.e-0.3) ? "curS" : "curW";
+}
+function gridRequest(layer, time){
+  const isWind = layer==="wind"||layer==="gust";
+  const m = isWind ? "wind" : currentModel(); const g = GRIDS[m];
+  const step = m==="curS" ? 0.25 : 1;
+  const box = clipBox(roundBox(viewBox(0.5), step), g.box);
+  return {key:`${m}${layer==="gust"?"g":""}|${+time}|${box.s},${box.n},${box.w},${box.e}`, box, g, model:m, gust: layer==="gust"};
+}
+function findCached(layer, time){ // any cached current grid for this hour whose box covers view
+  const m = (layer==="wind") ? "wind" : layer==="gust" ? "windg" : currentModel(); const vb = viewBox(0);
+  for(const [k,p] of gridCache){ const [mm,tt,bb] = k.split("|"); if(mm===m && +tt===+time && bb){ const [s,n,w,e]=bb.split(",").map(Number); if(boxContains({s,n,w,e},vb)) return {key:k}; } }
   return null;
 }
-async function setModelLayer(key){
-  activeKey = key;
-  document.querySelectorAll("#layerSeg button").forEach(b=>b.classList.toggle("on", b.dataset.l===key));
-  ls.set("layer", key);
-  if(wms){ map.removeLayer(wms); wms=null; wmsLayerName=null; }
-  $("#legend").hidden = true;
-  if(key==="none"){ setDot("#sMap",""); $("#note").textContent=""; return; }
-  const name = resolveLayerName(key); wmsLayerName = name;
-  tileErrors = 0; tileLoads = 0; setDot("#sMap","load","Loading forecast map…");
-  wms = L.tileLayer.wms(GEOMET, {layers:name, styles:LAYERS[key].style, format:"image/png", transparent:true, version:"1.3.0", tileSize:512, zoomOffset:0, opacity: key==="current"?0.95:0.6, pane:"model", time:isoZ(curTime()), attribution:"ECCC MSC GeoMet"});
-  wms.on("tileerror", ()=>{ tileErrors++; if(tileErrors>3 && tileLoads===0) setDot("#sMap","bad","Forecast map tiles failing – tap ⟳"); });
-  wms.on("tileload", ()=>{ tileLoads++; setDot("#sMap","ok", LAYERS[key].label); });
-  wms.addTo(map);
-  $("#legendImg").src = `${GEOMET}?service=WMS&version=1.3.0&request=GetLegendGraphic&format=image/png&layer=${name}&style=${LAYERS[key].style}&sld_version=1.1.0&lang=en`;
-  $("#legendImg").onload = ()=>{ $("#legend").hidden=false; };
-  checkExtent();
+function loadField(layer, time){
+  const hit = findCached(layer,time); if(hit) return gridCache.get(hit.key);
+  const req = gridRequest(layer, time);
+  const key = req.key;
+  if(gridCache.has(key)) return gridCache.get(key);
+  const p = (async()=>{
+    const {g, box} = req;
+    const jobs = [wcs(g.a, box, time), wcs(g.b, box, time)];
+    if(req.gust) jobs.push(wcs(GRIDS.gust.a, box, time));
+    const [A,B,G] = await Promise.all(jobs);
+    const n = A.w*A.h, u = new Float32Array(n), v = new Float32Array(n), mag = new Float32Array(n);
+    if(g.kind==="spd-dir"){
+      for(let i=0;i<n;i++){ const s=A.data[i], d=B.data[i]*Math.PI/180; u[i]=-s*Math.sin(d); v[i]=-s*Math.cos(d); mag[i]=(G?G.data[i]:s)*MS2KT; }
+    } else {
+      for(let i=0;i<n;i++){ let x=A.data[i], y=B.data[i]; if(!isFinite(x)||Math.abs(x)>50) x=0; if(!isFinite(y)||Math.abs(y)>50) y=0; u[i]=x; v[i]=y; mag[i]=Math.hypot(x,y)*MS2KT; }
+    }
+    return {w:A.w, h:A.h, west:A.west, east:A.east, south:A.south, north:A.north, u, v, mag, isCurrent:g.kind==="uv", name:g.name};
+  })().catch(e=>{ gridCache.delete(key); throw e; });
+  gridCache.set(key, p);
+  if(gridCache.size>40){ const k0 = gridCache.keys().next().value; gridCache.delete(k0); }
+  return p;
 }
-async function checkExtent(){
-  if(!wmsLayerName) return;
-  const ext = await getExtent(wmsLayerName); const t = curTime();
-  if(ext && (t > ext.end)){ $("#note").textContent = `Map layer ends ${fmtTime(ext.end,{weekday:"short",hour:"numeric"})} – showing nothing past that.`; if(wms) wms.setOpacity(0); }
-  else { $("#note").textContent = ""; if(wms) wms.setOpacity(activeKey==="current"?0.95:0.6); }
+function viewInsideField(){ const v=viewBox(0); return field && v.s>=field.south && v.n<=field.north && v.w>=field.west && v.e<=field.east && (activeKey!=="current" || field.name===GRIDS[currentModel()].name); }
+function sampleField(f, lat, lon){
+  const fx = (lon - f.west)/(f.east - f.west)*f.w - 0.5, fy = (f.north - lat)/(f.north - f.south)*f.h - 0.5;
+  if(fx<0||fy<0||fx>=f.w-1||fy>=f.h-1) return null;
+  const x0=fx|0, y0=fy|0, ax=fx-x0, ay=fy-y0, i=y0*f.w+x0;
+  const bl=(a)=> (a[i]*(1-ax)+a[i+1]*ax)*(1-ay) + (a[i+f.w]*(1-ax)+a[i+f.w+1]*ax)*ay;
+  return [bl(f.u), bl(f.v), bl(f.mag)];
 }
-function maybeSwapModel(){ if(activeKey==="current"||activeKey==="temp"){ const n=resolveLayerName(activeKey); if(n!==wmsLayerName) setModelLayer(activeKey); } }
 
+/* ============ flow renderer (animated streaks) ============ */
+const flowPane = map.getPane("flow");
+const fieldCv = document.createElement("canvas"); fieldCv.className="flowcv";
+const flowCv  = document.createElement("canvas"); flowCv.className="flowcv";
+flowPane.appendChild(fieldCv); flowPane.appendChild(flowCv);
+const fctx = fieldCv.getContext("2d"), pctx = flowCv.getContext("2d");
+let field = null, W=0, H=0, DPR = Math.min(2, window.devicePixelRatio||1);
+let latOfY = null, lonW=0, lonPerPx=0, particles = [], running = false, moving = false;
+function layoutCanvases(){
+  const s = map.getSize(); W=s.x; H=s.y;
+  for(const cv of [fieldCv, flowCv]){
+    cv.width = Math.round(W*(cv===flowCv?DPR:1)); cv.height = Math.round(H*(cv===flowCv?DPR:1));
+    cv.style.width=W+"px"; cv.style.height=H+"px";
+    L.DomUtil.setPosition(cv, map.containerPointToLayerPoint([0,0]));
+  }
+  pctx.setTransform(DPR,0,0,DPR,0,0);
+  latOfY = new Float64Array(H+1); for(let y=0;y<=H;y++) latOfY[y] = map.containerPointToLatLng([0,y]).lat;
+  lonW = map.containerPointToLatLng([0,0]).lng; lonPerPx = (map.containerPointToLatLng([W,0]).lng - lonW)/W;
+}
+function renderField(){
+  fctx.clearRect(0,0,W,H);
+  if(!field) return;
+  const step = 5, stops = field.isCurrent ? CUR_STOPS : WIND_STOPS;
+  const img = fctx.createImageData(Math.ceil(W/step), Math.ceil(H/step)); const d = img.data;
+  let k=0;
+  for(let y=0;y<H;y+=step){ const lat = latOfY[Math.min(H,y+2)];
+    for(let x=0;x<W;x+=step){ const s = sampleField(field, lat, lonW+(x+2)*lonPerPx);
+      if(s && !(field.isCurrent && s[2]<0.03)){ const c = ramp(stops, s[2]); d[k]=c[0]; d[k+1]=c[1]; d[k+2]=c[2]; d[k+3]= field.isCurrent?150:120; }
+      else d[k+3]=0;
+      k+=4; } }
+  // draw scaled up smoothly
+  const tmp = document.createElement("canvas"); tmp.width=img.width; tmp.height=img.height; tmp.getContext("2d").putImageData(img,0,0);
+  fctx.imageSmoothingEnabled = true; fctx.drawImage(tmp, 0, 0, img.width*step, img.height*step);
+}
+function seedParticles(){
+  const n = Math.min(3200, Math.round(W*H/ (field&&field.isCurrent?140:170)));
+  particles = new Array(n); for(let i=0;i<n;i++) particles[i] = newParticle(true);
+}
+function newParticle(rand){ return {x:Math.random()*W, y:Math.random()*H, age: rand?Math.floor(Math.random()*80):0, max: 50+Math.floor(Math.random()*60)}; }
+const NB = 10;
+let lastFrame = 0;
+function frame(ts){
+  requestAnimationFrame(frame);
+  if(!running || moving || !field || document.hidden || !$("#tFlow").checked) return;
+  if(ts-lastFrame < 30) return; lastFrame = ts;
+  pctx.globalCompositeOperation = "destination-in"; pctx.fillStyle = "rgba(0,0,0,0.90)"; pctx.fillRect(0,0,W,H);
+  pctx.globalCompositeOperation = "source-over";
+  const cur = field.isCurrent, stops = cur?CUR_STOPS:WIND_STOPS, maxV = cur?6:40;
+  const k = cur ? 2.2 : 0.16;
+  const paths = Array.from({length:NB},()=>new Path2D());
+  for(let i=0;i<particles.length;i++){
+    const p = particles[i];
+    if(p.age++ > p.max){ particles[i] = newParticle(false); continue; }
+    const yi = p.y|0; if(yi<0||yi>H){ particles[i]=newParticle(false); continue; }
+    const s = sampleField(field, latOfY[yi], lonW + p.x*lonPerPx);
+    if(!s || (cur && s[2]<0.04)){ particles[i]=newParticle(false); continue; }
+    const nx = p.x + s[0]*k, ny = p.y - s[1]*k;
+    const b = Math.max(0, Math.min(NB-1, Math.floor(s[2]/maxV*NB))) || 0;
+    paths[b].moveTo(p.x,p.y); paths[b].lineTo(nx,ny);
+    p.x=nx; p.y=ny;
+    if(nx<0||ny<0||nx>W||ny>H) particles[i]=newParticle(false);
+  }
+  pctx.lineWidth = cur?1.6:1.3; pctx.lineCap="round";
+  for(let b=0;b<NB;b++){ const c = ramp(stops, (b+0.5)/NB*maxV); pctx.strokeStyle = `rgba(${Math.min(255,c[0]+60)},${Math.min(255,c[1]+60)},${Math.min(255,c[2]+60)},0.92)`; pctx.stroke(paths[b]); }
+}
+requestAnimationFrame(frame);
+function clearFlow(){ pctx.clearRect(0,0,W,H); }
+map.on("movestart zoomstart", ()=>{ moving=true; flowCv.style.opacity=0; });
+map.on("zoomstart", ()=>{ fieldCv.style.opacity=0; });
+map.on("moveend", ()=>{
+  moving=false; layoutCanvases(); clearFlow(); flowCv.style.opacity=1; fieldCv.style.opacity=1;
+  if(activeKey==="temp" || !field || !viewInsideField()) refreshModel(); else { renderField(); seedParticles(); }
+  refreshVisibleCurrents(); scheduleCentreForecast(); drawTides(); refreshVisibleTides(); clearTimeout(window._ctT); window._ctT=setTimeout(loadCentreTide,700);
+});
+map.on("resize", ()=>{ layoutCanvases(); renderField(); seedParticles(); });
+
+/* ============ active layer ============ */
+let activeKey = "wind", tempWms = null, loadSeq = 0;
+function setScale(stops, max, unit){
+  const g = []; for(let i=0;i<=10;i++){ const v=i/10*max; g.push(`${rgb(ramp(stops,v))} ${i*10}%`); }
+  $("#scaleBar").style.background = `linear-gradient(90deg,${g.join(",")})`;
+  $("#scaleLbl").innerHTML = [0,max/4,max/2,3*max/4,max].map(v=>`<span>${+v.toFixed(1)}</span>`).join("") + `<span>${unit}</span>`;
+}
+async function refreshModel(){
+  const seq = ++loadSeq, key = activeKey, time = curTime();
+  if(key==="temp"){
+    field=null; clearFlow(); renderField(); $("#scale").hidden=true;
+    const name = (inSalishView() && map.getZoom()>=8) ? TEMP.salish : TEMP.west;
+    $("#modelName").textContent = name.includes("Salish") ? "CIOPS Salish 500 m" : "CIOPS West 2 km";
+    if(!tempWms || tempWms.options.layers!==name){
+      if(tempWms) map.removeLayer(tempWms);
+      tempWms = L.tileLayer.wms(GEOMET,{layers:name, styles:TEMP.style, format:"image/png", transparent:true, version:"1.3.0", tileSize:512, opacity:.7, pane:"model", time:isoZ(time)}).addTo(map);
+      tempWms.on("tileload",()=>setDot("#sMap","ok","Water temperature map loaded"));
+      tempWms.on("tileerror",()=>setDot("#sMap","stale","Some temperature tiles failed"));
+      $("#legendImg").src = `${GEOMET}?service=WMS&version=1.3.0&request=GetLegendGraphic&format=image/png&layer=${name}&style=${TEMP.style}&sld_version=1.1.0&lang=en`;
+      $("#legendImg").onload=()=>{ $("#legendImg").hidden = activeKey!=="temp"; };
+    } else tempWms.setParams({time:isoZ(time)});
+    return;
+  }
+  if(tempWms){ map.removeLayer(tempWms); tempWms=null; } $("#legendImg").hidden=true; $("#scale").hidden=false;
+  const isCur = key==="current";
+  setScale(isCur?CUR_STOPS:WIND_STOPS, isCur?6:40, "kt");
+  setDot("#sMap","load","Loading forecast grid…");
+  try{
+    const f = await loadField(key, time);
+    if(seq!==loadSeq) return;
+    field = f; $("#modelName").textContent = f.name + (key==="gust"?" · gusts":"");
+    $("#note").textContent = "";
+    layoutCanvases(); renderField(); seedParticles(); clearFlow(); running = true;
+    setDot("#sMap","ok", `${f.name} grid · ${fmtTime(time,{weekday:"short",hour:"numeric"})}`);
+    prefetch(key, time);
+  }catch(e){
+    if(seq!==loadSeq) return;
+    field=null; renderField(); clearFlow();
+    const beyond = /no data/.test(e.message);
+    $("#note").textContent = beyond ? "No model data for this hour (past the end of the forecast)." : "Couldn't load the forecast grid – tap ⟳ to retry.";
+    setDot("#sMap", beyond?"stale":"bad", beyond?"No model data for this hour":"Forecast grid failed");
+  }
+}
+function prefetch(key, time){ for(const h of [1]){ const t = new Date(+time+h*3600e3); if(+t <= +t0+HOURS*3600e3) loadField(key, t).catch(()=>{}); } }
+function inSalishView(){ const c = map.getCenter(); return c.lat>SALISH.s && c.lat<SALISH.n && c.lng>SALISH.w && c.lng<SALISH.e; }
+function setLayer(key){
+  activeKey = key; ls.set("layer",key);
+  document.querySelectorAll("#layerSeg button").forEach(b=>b.classList.toggle("on", b.dataset.l===key));
+  refreshModel();
+}
+
+/* ============ timeline (wind at map centre) ============ */
+let centreFc = null, centreTimer = null, lastCentre = null;
+function scheduleCentreForecast(){ clearTimeout(centreTimer); centreTimer = setTimeout(loadCentreForecast, 700); }
+async function loadCentreForecast(){
+  const c = map.getCenter();
+  if(lastCentre && map.distance(c,lastCentre) < 4000 && centreFc) return;
+  lastCentre = c;
+  try{
+    const j = await fetchJSON(`https://api.open-meteo.com/v1/forecast?latitude=${c.lat.toFixed(3)}&longitude=${c.lng.toFixed(3)}&hourly=wind_speed_10m,wind_gusts_10m,wind_direction_10m&models=gem_seamless&wind_speed_unit=kn&timezone=GMT&forecast_days=4&timeformat=unixtime`,{timeout:12000});
+    const h = j.hourly, byT = {}; h.time.forEach((t,i)=>byT[t]=i);
+    centreFc = Array.from({length:HOURS+1},(_,i)=>{ const t = (+t0/1000)+i*3600, k = byT[t]; return k==null?null:{w:h.wind_speed_10m[k], g:h.wind_gusts_10m[k], d:h.wind_direction_10m[k]}; });
+    ls.set("centreFc",{at:Date.now(), c:[c.lat,c.lng], t0:+t0, fc:centreFc});
+  }catch(e){ const s = ls.get("centreFc"); if(s && s.t0===+t0) centreFc = s.fc; }
+  drawBars(); updateSummary();
+}
+function drawBars(){
+  const bars = $("#bars"); let html = "";
+  for(let i=0;i<=HOURS;i++){ const f = centreFc?.[i]; const lab = (i%4===0 && f) ? Math.round(f.w) : "";
+    html += `<div style="background:${f?windColor(f.w):'#1d262e'}">${lab}</div>`; }
+  bars.innerHTML = html;
+  let days = "";
+  for(let i=0;i<=HOURS;i++){ const d = new Date(+t0+i*3600e3), hr = localHour(d), pct = (i+0.5)/(HOURS+1)*100;
+    if(hr===0) days += `<span class="d" style="left:${pct}%">${fmtDay(d).split(" ")[0]}</span>`;
+    else if(hr===12) days += `<span style="left:${pct}%">12</span>`; }
+  $("#days").innerHTML = days;
+}
+function updateSummary(){
+  const d = curTime(); const f = centreFc?.[tIdx];
+  $("#sumMain").innerHTML = f ? `<span style="color:${windColor(f.w)}">${Math.round(f.w)} kn</span> ${compass(f.d)} · gusts <span style="color:${windColor(f.g)}">${Math.round(f.g)}</span>` : "Wind forecast loading…";
+  let rng = "";
+  if(centreFc){ const ws = centreFc.filter(Boolean).map(x=>x.w); if(ws.length) rng = ` · ${Math.round(Math.min(...ws))}–${Math.round(Math.max(...ws))} kn next 48 h`; }
+  $("#sumSub").textContent = `${fmtTime(d,{weekday:"short",hour:"numeric"})}${tIdx===0?" (now)":" · +"+tIdx+" h"}${rng}`;
+  const te = $("#sumTide");
+  if(typeof centreTide!=="undefined" && centreTide){ const a = tideAt(centreTide,+d), nx = nextTideEvent(centreTide,+d);
+    te.innerHTML = a ? `<span class="tw">${a.rising?"▲":"▼"}</span> Tide ${a.h.toFixed(1)} m ${a.rising?"rising":"falling"}${nx?` · ${nx.hi?"high":"low"} ${nx.v.toFixed(1)} m at ${fmtTime(new Date(nx.t),{hour:"numeric",minute:"2-digit"})}`:""} <span class="tst">${centreTideSt.name}</span>` : "";
+  } else te.textContent = "";
+}
 /* ============ observed wind (ECCC SWOB) ============ */
 const obsLayer = L.layerGroup().addTo(map);
 let obsData = ls.get("obs") || null;
@@ -276,17 +522,18 @@ function enqueue(fn){ return new Promise((res,rej)=>{ queue.push({fn,res,rej}); 
 async function runQueue(){ if(qBusy) return; qBusy=true; while(queue.length){ const {fn,res,rej}=queue.shift(); try{ res(await fn()); }catch(e){ rej(e); } await sleep(400); } qBusy=false; } // ≤3 req/s API limit
 async function loadCurStations(){
   setDot("#sCur","load","Loading tidal current stations…");
-  let st = ls.get("curStations");
+  let st = ls.get("chsStations");
   if(!st || Date.now()-st.at > 7*864e5){
     try{
       const all = await fetchJSON(`${IWLS}/stations?chs-region-code=PAC`,{timeout:20000});
-      st = {at:Date.now(), list: all.filter(s=>s.timeSeries.some(t=>t.code==="wcsp1")).map(s=>({id:s.id, code:s.code, name:s.officialName.trim(), lat:s.latitude, lon:s.longitude}))};
-      ls.set("curStations", st);
-    }catch(e){ if(!st){ setDot("#sCur","bad","Tidal stations failed – tap ⟳"); return; } }
+      const m = s=>({id:s.id, code:s.code, name:s.officialName.trim().replace(/\b\w/g,c=>c.toUpperCase()), lat:s.latitude, lon:s.longitude});
+      st = {at:Date.now(), list: all.filter(s=>s.timeSeries.some(t=>t.code==="wcsp1")).map(m), tides: all.filter(s=>s.timeSeries.some(t=>t.code==="wlp")).map(m)};
+      ls.set("chsStations", st);
+    }catch(e){ if(!st){ setDot("#sCur","bad","Tide & current stations failed – tap ⟳"); return; } }
   }
-  curStations = st.list;
-  setDot("#sCur","ok",`${curStations.length} CHS current stations`);
-  drawCurrents(); refreshVisibleCurrents();
+  curStations = st.list; tideStations = st.tides || [];
+  setDot("#sCur","ok",`${tideStations.length} tide + ${curStations.length} current stations (CHS)`);
+  drawCurrents(); refreshVisibleCurrents(); drawTides(); refreshVisibleTides(); loadCentreTide();
 }
 function cacheKeyCur(id){ return "cur:"+id+":"+t0.toISOString().slice(0,13); }
 async function getCurrentSeries(s){
@@ -337,6 +584,111 @@ function refreshVisibleCurrents(){
     for(const s of vis){ try{ await getCurrentSeries(s); drawCurrents(); }catch(e){ fail++; } }
     setDot("#sCur", fail? (fail===vis.length?"bad":"stale") : "ok", fail?`${fail} stations failed to load`:`${curStations.length} CHS current stations`);
   }, 500);
+}
+
+
+/* ============ CHS tide heights ============ */
+const tideLayer = L.layerGroup().addTo(map);
+let tideStations = [];
+const tideCache = {};
+async function getTideSeries(s){
+  if(tideCache[s.id]) return tideCache[s.id];
+  const key = "tide:"+s.id+":"+t0.toISOString().slice(0,13);
+  const saved = ls.get(key); if(saved){ tideCache[s.id]=saved; return saved; }
+  const from = isoZ(new Date(+t0-3*3600e3)), to = isoZ(new Date(+t0+(HOURS+3)*3600e3));
+  const wl = await enqueue(()=>fetchJSON(`${IWLS}/stations/${s.id}/data?time-series-code=wlp&from=${from}&to=${to}&resolution=FIFTEEN_MINUTES`));
+  const hl = await enqueue(()=>fetchJSON(`${IWLS}/stations/${s.id}/data?time-series-code=wlp-hilo&from=${isoZ(new Date(+t0-12*3600e3))}&to=${to}`)).catch(()=>[]);
+  const ser = wl.map(x=>[+new Date(x.eventDate), x.value]);
+  if(!ser.length) throw new Error("no predictions");
+  // classify hi/lo by comparing to neighbours
+  const ev = hl.map(x=>({t:+new Date(x.eventDate), v:x.value}));
+  ev.forEach((e,i)=>{ const nb = [ev[i-1],ev[i+1]].filter(Boolean); e.hi = nb.length ? nb.every(n=>e.v>n.v) : e.v > (interp(ser,e.t+3600e3)??e.v); });
+  const data = {ser, ev};
+  tideCache[s.id] = data; ls.set(key, data);
+  return data;
+}
+function tideAt(d, t){ const v = interp(d.ser, t), v2 = interp(d.ser, t+20*60e3); return v==null?null:{h:v, rising: v2!=null ? v2>v : null}; }
+function nextTideEvent(d, t){ return d.ev.find(e=>e.t>t) || null; }
+function nearestTideStation(lat, lon){ let best=null, bd=1e9; for(const s of tideStations){ const dd = Math.hypot(s.lat-lat, (s.lon-lon)*Math.cos(lat*Math.PI/180)); if(dd<bd){ bd=dd; best=s; } } return best; }
+function drawTides(){
+  tideLayer.clearLayers();
+  if(!$("#tTide").checked || map.getZoom()<9) return;
+  const b = map.getBounds(); const t = +curTime();
+  for(const s of tideStations){
+    if(!b.contains([s.lat,s.lon])) continue;
+    const d = tideCache[s.id]; const a = d ? tideAt(d,t) : null;
+    const html = a ? `<div class="tide"><span class="tw">${a.rising?"▲":"▼"}</span>${a.h.toFixed(1)}<small>m</small></div>` : `<div class="tide dim"><span class="tw">≈</span></div>`;
+    L.marker([s.lat,s.lon],{pane:"marks", icon:L.divIcon({className:"", html, iconSize:[56,20], iconAnchor:[8,10]})})
+      .on("click", ev=>{ L.DomEvent.stopPropagation(ev); openTide(s); }).addTo(tideLayer);
+  }
+}
+let tideTimer=null;
+function refreshVisibleTides(){
+  clearTimeout(tideTimer);
+  tideTimer = setTimeout(async ()=>{
+    if(!$("#tTide").checked || map.getZoom()<9 || !tideStations.length) return;
+    const b = map.getBounds(), c = map.getCenter();
+    const vis = tideStations.filter(s=>b.contains([s.lat,s.lon]) && !tideCache[s.id])
+      .sort((a,z)=>map.distance(c,[a.lat,a.lon])-map.distance(c,[z.lat,z.lon])).slice(0,10);
+    for(const s of vis){ try{ await getTideSeries(s); drawTides(); }catch(e){} }
+  }, 600);
+}
+let centreTide = null, centreTideSt = null;
+async function loadCentreTide(){
+  if(!tideStations.length) return;
+  const c = map.getCenter(); const s = nearestTideStation(c.lat, c.lng); if(!s) return;
+  if(centreTideSt && centreTideSt.id===s.id && centreTide){ drawTideRow(); updateSummary(); return; }
+  centreTideSt = s; centreTide = null; drawTideRow(); updateSummary();
+  try{ centreTide = await getTideSeries(s); }catch(e){ centreTide = null; }
+  if(centreTideSt===s){ drawTideRow(); updateSummary(); drawTides(); }
+}
+function drawTideRow(){
+  const el = $("#tideRow");
+  if(!centreTide){ el.innerHTML = `<span class="tlab">${centreTideSt? "Tide · "+centreTideSt.name+" …" : ""}</span>`; return; }
+  const a = +t0, z = +t0 + HOURS*3600e3, W = 1000, Hh = 40;
+  const pts = centreTide.ser.filter(p=>p[0]>=a-900e3 && p[0]<=z+900e3);
+  const hs = pts.map(p=>p[1]); const mn = Math.min(...hs), mx = Math.max(...hs), rg = (mx-mn)||1;
+  const X = t => ((t-a)/(z-a))*W*(HOURS/(HOURS+1)) + W/(HOURS+1)/2, Y = v => Hh-3 - (v-mn)/rg*(Hh-8);
+  const d = pts.map((p,i)=>(i?"L":"M")+X(p[0]).toFixed(1)+","+Y(p[1]).toFixed(1)).join("");
+  const area = d + `L${X(pts.at(-1)[0]).toFixed(1)},${Hh}L${X(pts[0][0]).toFixed(1)},${Hh}Z`;
+  let marks = "", labs = "";
+  for(const e of centreTide.ev){ if(e.t<a||e.t>z) continue; const x=X(e.t), y=Y(e.v);
+    marks += `<circle cx="${x}" cy="${y}" r="4" fill="${e.hi?'#4fc3f7':'#9fb3c1'}" vector-effect="non-scaling-stroke"/>`;
+    labs += `<span class="tv ${e.hi?'hi':'lo'}" style="left:${(x/W*100).toFixed(2)}%;top:${e.hi? (y/Hh*100+14):(y/Hh*100-48)}%">${e.v.toFixed(1)}</span>`; }
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="none"><path d="${area}" fill="rgba(79,195,247,.16)"/><path d="${d}" fill="none" stroke="#4fc3f7" stroke-width="2.5" vector-effect="non-scaling-stroke"/></svg>${labs}<span class="tlab">Tide · ${centreTideSt.name} (m)</span>`;
+}
+async function openTide(s){
+  if(tapMarker){ map.removeLayer(tapMarker); tapMarker=null; }
+  const sh = $("#sheet");
+  sh.innerHTML = sheetHead(s.name, "CHS tide prediction · metres above chart datum") + `<div id="tdBody" class="muted">Loading predictions…</div>`;
+  sh.classList.add("open"); sh.scrollTop=0;
+  try{
+    const d = await getTideSeries(s); drawTides();
+    const t = +curTime(), a = tideAt(d,t), nx = nextTideEvent(d,t);
+    let evh="", lastDay=null;
+    for(const e of d.ev.filter(e=>e.t>Date.now()-6*3600e3).slice(0,10)){ const dt=new Date(e.t), dk=localDayKey(dt);
+      evh += `<div><span>${dk!==lastDay?"<b>"+fmtDay(dt)+"</b> ":""}${fmtTime(dt,{hour:"numeric",minute:"2-digit"})}</span><span class="${e.hi?'f':'s'}">${e.hi?"High":"Low"} ${e.v.toFixed(2)} m · ${(e.v*3.2808).toFixed(1)} ft</span></div>`; lastDay=dk; }
+    $("#tdBody").className=""; $("#tdBody").innerHTML =
+      `<div class="kv"><div><span>At ${fmtTime(curTime(),{weekday:"short",hour:"numeric"})}</span><b>${a? a.h.toFixed(2)+" m":"–"}</b><span>${a? (a.rising?"▲ rising":"▼ falling")+" · "+(a.h*3.2808).toFixed(1)+" ft":""}</span></div>
+       <div><span>Next</span><b>${nx? (nx.hi?"High ":"Low ")+nx.v.toFixed(1)+" m":"–"}</b><span>${nx? fmtTime(new Date(nx.t),{weekday:"short",hour:"numeric",minute:"2-digit"}):""}</span></div></div>
+       <div class="sec-t">Next 48 h</div><canvas class="spark" id="tspark"></canvas>
+       <div class="sec-t">Highs &amp; lows (local)</div><div class="ev">${evh||"<div class='s'>No events returned</div>"}</div>
+       <div class="muted" style="padding-top:8px">Predictions from the Canadian Hydrographic Service (station ${s.code}). Not for navigation – check official tables.</div>`;
+    drawTideSpark($("#tspark"), d, t);
+  }catch(e){ $("#tdBody").className="err"; $("#tdBody").textContent="Couldn't load tide predictions ("+e.message+"). Tap the station again to retry."; }
+}
+function drawTideSpark(cv, d, sel){
+  const dpr = devicePixelRatio||1, W = cv.clientWidth, H = cv.clientHeight; cv.width=W*dpr; cv.height=H*dpr;
+  const c = cv.getContext("2d"); c.scale(dpr,dpr);
+  const pts = d.ser.filter(p=>p[0]>=Date.now()-3600e3); if(pts.length<2) return;
+  const hs = pts.map(p=>p[1]), mn=Math.min(...hs), mx=Math.max(...hs), rg=(mx-mn)||1;
+  const x = t => (t-pts[0][0])/(pts.at(-1)[0]-pts[0][0])*W, y = v => H-12 - (v-mn)/rg*(H-26);
+  c.fillStyle="rgba(79,195,247,.15)"; c.beginPath(); c.moveTo(0,H); pts.forEach(p=>c.lineTo(x(p[0]),y(p[1]))); c.lineTo(W,H); c.fill();
+  c.strokeStyle="#4fc3f7"; c.lineWidth=2; c.beginPath(); pts.forEach((p,i)=> i?c.lineTo(x(p[0]),y(p[1])):c.moveTo(x(p[0]),y(p[1]))); c.stroke();
+  c.fillStyle="#cfe7f5"; c.font="bold 10px system-ui"; c.textAlign="center";
+  for(const e of d.ev){ if(e.t<pts[0][0]||e.t>pts.at(-1)[0]) continue; c.fillText(e.v.toFixed(1), x(e.t), y(e.v)-5); }
+  c.strokeStyle="#ffb300"; c.beginPath(); c.moveTo(x(sel),0); c.lineTo(x(sel),H); c.stroke();
+  c.fillStyle="#8fa7bd"; c.textAlign="left"; for(let t=pts[0][0]; t<pts.at(-1)[0]; t+=3600e3){ const d0=new Date(t); if(localHour(d0)===0){ c.fillRect(x(t),0,1,H); c.fillText(fmtDay(d0),x(t)+3,10);} }
 }
 
 /* ============ spot forecast sheet ============ */
@@ -455,32 +807,47 @@ function drawSpark(cv, d, sel){
 }
 
 /* ============ wiring ============ */
-document.querySelectorAll("#layerSeg button").forEach(b=>b.onclick=()=>setModelLayer(b.dataset.l));
+document.querySelectorAll("#layerSeg button").forEach(b=>b.onclick=()=>setLayer(b.dataset.l));
+$("#btnMenu").onclick = e=>{ e.stopPropagation(); $("#menu").classList.toggle("open"); };
+document.addEventListener("click", e=>{ if(!$("#menu").contains(e.target) && e.target!==$("#btnMenu")) $("#menu").classList.remove("open"); });
+$("#tFlow").onchange = ()=>{ ls.set("tFlow",$("#tFlow").checked); clearFlow(); };
 $("#tObs").onchange = ()=>{ ls.set("tObs",$("#tObs").checked); drawObs(); };
+$("#tTide").onchange = ()=>{ ls.set("tTide",$("#tTide").checked); drawTides(); refreshVisibleTides(); };
 $("#tCur").onchange = ()=>{ ls.set("tCur",$("#tCur").checked); drawCurrents(); refreshVisibleCurrents(); };
 $("#tSea").onchange = ()=>{ ls.set("tSea",$("#tSea").checked); $("#tSea").checked ? seamarks.addTo(map) : map.removeLayer(seamarks); };
 let tTimer=null;
-$("#slider").max = HOURS;
-$("#slider").oninput = ()=>{ tIdx = +$("#slider").value; updateTimeLabel(); drawCurrents();
-  clearTimeout(tTimer); tTimer = setTimeout(()=>{ if(wms){ wms.setParams({time:isoZ(curTime())}); checkExtent(); } }, 250); };
-let playing=null;
-$("#btnPlay").onclick = ()=>{
-  if(playing){ clearInterval(playing); playing=null; $("#btnPlay").textContent="▶"; return; }
-  $("#btnPlay").textContent="❚❚";
-  playing = setInterval(()=>{ tIdx = (tIdx+1) % (HOURS+1); $("#slider").value=tIdx; updateTimeLabel(); drawCurrents(); if(wms){ wms.setParams({time:isoZ(curTime())}); checkExtent(); } }, 1600);
+function setTime(i, immediate){
+  tIdx = Math.max(0, Math.min(HOURS, i)); $("#slider").value = tIdx;
+  updateSummary(); drawCurrents(); drawTides();
+  clearTimeout(tTimer); tTimer = setTimeout(refreshModel, immediate?0:200);
+}
+$("#slider").oninput = ()=> setTime(+$("#slider").value);
+let playing = false;
+$("#btnPlay").onclick = async ()=>{
+  if(playing){ playing=false; $("#btnPlay").textContent="▶"; return; }
+  playing = true; $("#btnPlay").textContent="❚❚";
+  while(playing){
+    setTime((tIdx+1) % (HOURS+1), true);
+    await sleep(1400);
+    // wait (max 8 s) for this hour's grid so animation doesn't skip
+    for(let w=0; w<16 && playing && $("#sMap").classList.contains("load"); w++) await sleep(500);
+  }
 };
-$("#btnNow").onclick = ()=>{ tIdx=0; $("#slider").value=0; $("#slider").oninput(); };
-$("#btnRefresh").onclick = ()=>{ for(const k in curCache) delete curCache[k]; layerExtent={}; loadObs(); loadCurStations(); setModelLayer(activeKey); };
+$("#btnHome").onclick = ()=> map.setView(HOME.c, HOME.z);
+$("#btnNow").onclick = ()=> setTime(0, true);
+$("#btnRefresh").onclick = ()=>{ gridCache.clear(); for(const k in curCache) delete curCache[k]; for(const k in tideCache) delete tideCache[k]; centreTide=null; centreTideSt=null; centreFc=null; lastCentre=null; loadObs(); loadCurStations(); refreshModel(); loadCentreForecast(); };
 $("#btnLoc").onclick = ()=>{ if(!navigator.geolocation) return; navigator.geolocation.getCurrentPosition(p=>{ map.setView([p.coords.latitude,p.coords.longitude], Math.max(map.getZoom(),10)); L.circleMarker([p.coords.latitude,p.coords.longitude],{radius:7,color:"#fff",fillColor:"#2196f3",fillOpacity:1,weight:3,pane:"marks"}).addTo(map); }, ()=>{ $("#note").textContent="Location unavailable."; }, {enableHighAccuracy:true,timeout:10000}); };
 map.on("click", e=>{ if($("#sheet").classList.contains("open")) { closeSheet(); return; } openSpot(e.latlng.lat, e.latlng.lng); });
 
 // restore prefs
+if(ls.get("tFlow")===false) $("#tFlow").checked=false;
 if(ls.get("tObs")===false) $("#tObs").checked=false;
 if(ls.get("tCur")===false) $("#tCur").checked=false;
+if(ls.get("tTide")===false) $("#tTide").checked=false;
 if(ls.get("tSea")) { $("#tSea").checked=true; seamarks.addTo(map); }
-updateTimeLabel();
-setModelLayer(ls.get("layer") || "wind");
-loadObs(); loadCurStations();
+layoutCanvases(); drawBars(); updateSummary();
+setLayer(ls.get("layer") || "wind");
+loadCentreForecast(); loadObs(); loadCurStations();
 setInterval(loadObs, 10*60e3);
 document.addEventListener("visibilitychange", ()=>{ if(!document.hidden && obsData && Date.now()-obsData.at > 10*60e3) loadObs(); });
 if("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("sw.js").catch(()=>{});
