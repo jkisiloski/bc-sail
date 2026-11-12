@@ -1061,12 +1061,15 @@ function surfSeries(sp, wind, tide){
     // wind quality at the spot
     const kt = U*MS2KT, rel = Math.abs(angDiff(D, sp.normal));
     const state = kt < 5 ? "glassy" : rel < 45 ? "onshore" : rel > 135 ? "offshore" : "cross-shore";
-    let size = Hb<0.25 ? 0 : Math.min(4, (Hb-0.25)/0.25);
-    if(bi.width > 250){ size *= 0.75; }
+    // size counts, but with diminishing returns; wave shape multiplies it
+    const ft = Hb*3.281;
+    let size = ft < 0.8 ? 0 : 4*(1 - Math.exp(-(ft-0.8)/1.6));       // 1 ft≈0.5, 2 ft≈2.1, 3 ft≈3.0, 4 ft≈3.5, 6 ft≈3.9
+    if(bi.width > 250){ size *= 0.8; }
+    const shapeMult = {"closeout":0.45, "mostly closing":0.7, "peeling":1.2, "fast peel":1.05, "sectiony":0.85, "point":1.3}[shape] ?? 1;
+    size *= shapeMult;
     let q = 0;
-    if(seaT >= 6) q += 0.5; else if(seaT < 4) q -= 0.5;
-    if(bi.type==="plunging") q += 0.25; else if(bi.type==="shorebreak") q -= 0.75;
-    q += peelQ;
+    if(seaT >= 6) q += 0.3; else if(seaT < 4) q -= 0.4;
+    if(bi.type==="plunging") q += 0.2; else if(bi.type==="shorebreak") q -= 0.6;
     if((shape==="closeout"||shape==="mostly closing") && state==="onshore" && kt>12) q -= 0.5; // wind closes it out faster
     if(bi.width > 250) q -= 0.5;
     if(state==="onshore") q -= kt>28?3 : kt>20?2 : kt>12?1 : kt>6?0.5 : 0;
@@ -1143,6 +1146,86 @@ function openSurf(sp){
   const st = sh.querySelector(".strip"), nc = st?.querySelector("td.now"); if(nc) st.scrollLeft = Math.max(0, nc.offsetLeft-80);
 }
 
+/* ============ is this point land? (reads the basemap pixel, so it matches the coastline you see) ============ */
+const tileImgCache = new Map();
+function loadTileImg(z,x,y){
+  const k = `${z}/${y}/${x}`; if(tileImgCache.has(k)) return tileImgCache.get(k);
+  const p = new Promise(res=>{ const im = new Image(); im.crossOrigin="anonymous"; im.onload=()=>res(im); im.onerror=()=>res(null); im.src = `${ESRI}World_Dark_Gray_Base/MapServer/tile/${k}`; });
+  tileImgCache.set(k,p); if(tileImgCache.size>40) tileImgCache.delete(tileImgCache.keys().next().value); return p;
+}
+async function isLandAt(lat, lon){
+  const z = 15, n = 2**z, x = (lon+180)/360*n, yr = lat*Math.PI/180, y = (1 - Math.log(Math.tan(yr)+1/Math.cos(yr))/Math.PI)/2*n;
+  const im = await loadTileImg(z, Math.floor(x), Math.floor(y)); if(!im) return null;
+  try{ const c = document.createElement("canvas"); c.width=c.height=1; const g = c.getContext("2d");
+    g.drawImage(im, -Math.floor((x%1)*256), -Math.floor((y%1)*256));
+    const d = g.getImageData(0,0,1,1).data; return (d[0]+d[1]+d[2])/3 > 52;   // water ≈ 36, land ≈ 72
+  }catch(e){ return null; }
+}
+
+/* ============ current forecast at a tapped point (Current view) ============ */
+async function openCurrentSpot(lat, lon){
+  if(tapMarker) map.removeLayer(tapMarker);
+  tapMarker = L.marker([lat,lon],{icon:L.divIcon({className:"tapmark",iconSize:[14,14]}), pane:"marks"}).addTo(map);
+  const sh = $("#sheet");
+  sh.innerHTML = sheetHead(`${lat.toFixed(3)}°, ${lon.toFixed(3)}°`, "Surface current forecast · CIOPS model") + `<div id="cpBody" class="muted">Checking location…</div>`;
+  sh.classList.add("open"); sh.scrollTop=0;
+  const land = await isLandAt(lat, lon);
+  const body = () => $("#cpBody");
+  if(land){ if(body()) body().textContent = "That's on land – tap on the water to see its current forecast."; return; }
+  // nearest official CHS current station
+  let nearSt = null; for(const s of curStations){ const d = map.distance([lat,lon],[s.lat,s.lon]); if(d < 8000 && (!nearSt || d < nearSt.d)) nearSt = {s, d}; }
+  const inS = lat>SALISH.s && lat<SALISH.n && lon>SALISH.w && lon<SALISH.e;
+  let pfx = inS ? "CIOPS-SalishSea_500m" : "CIOPS-West_2km";
+  const tide = (()=>{ const ts = nearestTideStation(lat, lon); return ts ? getTideSeries(ts).then(d=>({d, name:ts.name})).catch(()=>null) : Promise.resolve(null); })();
+  const vals = new Array(HOURS+1).fill(undefined);
+  const order = []; for(let i=0;i<=HOURS;i+=3) order.push(i); for(let i=0;i<=HOURS;i++) if(i%3) order.push(i);
+  const getHour = async i => { const t = new Date(+t0 + i*3600e3);
+    const [x,y] = await Promise.all([gfi(`${pfx}_SeaWaterVelocityX_0.5m`,lat,lon,t).catch(()=>null), gfi(`${pfx}_SeaWaterVelocityY_0.5m`,lat,lon,t).catch(()=>null)]);
+    vals[i] = (x==null||y==null||(x===0&&y===0)) ? null : {kt:Math.hypot(x,y)*MS2KT, dir:(Math.atan2(x,y)*180/Math.PI+360)%360}; };
+  // first hour decides the model (fall back to the 2 km West model outside the 500 m grid)
+  await getHour(0);
+  if(vals[0]==null && inS){ pfx = "CIOPS-West_2km"; await getHour(0); }
+  if(vals[0]==null){ if(body()) body().textContent = "No model current here (too close to shore or outside the model)."; return; }
+  let td = null; tide.then(v=>{ td = v; render(); });
+  const render = () => {
+    const el = body(); if(!el) return;
+    const got = vals.map((v,i)=>[i,v]).filter(([i,v])=>v);
+    if(!got.length) return;
+    // interpolate gaps for display while the in-between hours load
+    const at = i => { if(vals[i]) return vals[i]; let a=i-1,b=i+1; while(a>=0 && !vals[a]) a--; while(b<=HOURS && !vals[b]) b++;
+      if(a<0||b>HOURS) return null; const f=(i-a)/(b-a); return {kt: vals[a].kt+(vals[b].kt-vals[a].kt)*f, dir: vals[f<0.5?a:b].dir, est:true}; };
+    const series = Array.from({length:HOURS+1},(_,i)=>at(i));
+    const cur = series[tIdx] || series[0];
+    // lightest and strongest periods (local minima / maxima)
+    const ext=[]; for(let i=1;i<HOURS;i++){ const p=series[i-1], c=series[i], n=series[i+1]; if(!p||!c||!n) continue;
+      if(c.kt<=p.kt && c.kt<n.kt) ext.push({i, kind:"light", kt:c.kt}); if(c.kt>=p.kt && c.kt>n.kt) ext.push({i, kind:"strong", kt:c.kt, dir:c.dir}); }
+    const maxKt = Math.max(...series.filter(Boolean).map(v=>v.kt));
+    let hdr="<tr><th class='rowlab'>Local</th>", rs="<tr><td class='rowlab'>Speed kt</td>", rd="<tr><td class='rowlab'>Toward</td>", rt="<tr><td class='rowlab'>Tide m</td>";
+    series.forEach((v,i)=>{ const dt=new Date(+t0+i*3600e3), mid=localHour(dt)===0, cls=(mid?"d ":"")+(i===tIdx?"now":"");
+      hdr += `<th class="${mid?'d':''}">${mid? fmtDay(dt).split(" ")[0] : fmtTime(dt,{hour:"numeric"}).replace(/\s?[ap]\.?m\.?/i,m=>m.trim()[0].toLowerCase())}</th>`;
+      rs += v ? `<td class="${cls}" style="background:${rgb(ramp(CUR_STOPS,v.kt))};color:#fff;font-weight:700;opacity:${v.est?0.55:1}">${v.kt.toFixed(1)}</td>` : `<td class="${cls}">…</td>`;
+      rd += `<td class="${cls}">${v && !v.est ? arrowSVG(v.dir, "#cfe3f3", 14) : ""}</td>`;
+      const th = td ? interp(td.d.ser, +dt) : null; rt += `<td class="${cls}" style="color:#7fb6d3">${th!=null?th.toFixed(1):""}</td>`; });
+    const lights = ext.filter(e=>e.kind==="light").slice(0,6), strongs = ext.filter(e=>e.kind==="strong").slice(0,6);
+    const evRows = ext.slice(0,12).map(e=>{ const dt=new Date(+t0+e.i*3600e3); return `<div><span><b>${fmtTime(dt,{weekday:"short"})}</b> ${fmtTime(dt,{hour:"numeric"})}</span><span class="${e.kind==="light"?"s":"f"}">${e.kind==="light"?"Lightest":"Strongest"} ${e.kt.toFixed(1)} kt${e.dir!=null?" toward "+compass(e.dir):""}</span></div>`; }).join("");
+    const done = vals.filter(v=>v!==undefined).length;
+    el.className = ""; el.innerHTML =
+      `<div class="kv"><div><span>At ${fmtTime(curTime(),{weekday:"short",hour:"numeric"})}</span><b style="color:${rgb(ramp(CUR_STOPS,cur.kt))}">${cur.kt.toFixed(1)} kt</b><span>toward ${compass(cur.dir)} ${Math.round(cur.dir)}°</span></div>
+        <div><span>Range next 48 h</span><b>${Math.min(...series.filter(Boolean).map(v=>v.kt)).toFixed(1)}–${maxKt.toFixed(1)} kt</b><span>${pfx.includes("Salish")?"CIOPS 500 m":"CIOPS 2 km"}</span></div></div>
+       ${nearSt? `<div class="muted" style="padding:8px 14px 0">Official CHS prediction nearby: <a href="#" id="cpSt" style="color:#81d4fa">${nearSt.s.name}</a> (${(nearSt.d/1000).toFixed(1)} km)</div>`:""}
+       <div class="sec-t">Next 48 h${done<HOURS+1?` · loading ${done}/${HOURS+1}…`:""}</div><div class="strip" id="cpStrip"><table>${hdr}</tr>${rs}</tr>${rd}</tr>${td?rt+"</tr>":""}</table></div>
+       <div class="sec-t">Lightest &amp; strongest (local)</div><div class="ev">${evRows || (done<HOURS+1 ? "<div class='s'>Waiting for more hours…</div>" : "<div class='s'>Steady flow – no clear lightest or strongest periods</div>")}</div>
+       <div class="muted" style="padding-top:10px">Model surface current (top 0.5 m), hourly. Narrow passes can run much faster than the model shows – use the CHS station predictions there. Not for navigation.</div>`;
+    const a = $("#cpSt"); if(a) a.onclick = ev=>{ ev.preventDefault(); openStation(nearSt.s); };
+    const st = $("#cpStrip"), nc = st?.querySelector("td.now"); if(st && nc && !st.dataset.scrolled){ st.scrollLeft = Math.max(0, nc.offsetLeft-80); st.dataset.scrolled = 1; }
+  };
+  render();
+  // load the rest: 3-hourly first, then fill in; 8 at a time
+  const rest = order.filter(i=>i!==0); let k = 0;
+  const worker = async () => { while(k < rest.length){ const i = rest[k++]; await getHour(i); if(k%4===0 || k===rest.length) render(); if(!$("#cpBody")) return; } };
+  await Promise.all(Array.from({length:8}, worker)); render();
+}
+
 /* ============ spot forecast sheet ============ */
 let tapMarker = null;
 function closeSheet(){ $("#sheet").classList.remove("open"); if(tapMarker){ map.removeLayer(tapMarker); tapMarker=null; } }
@@ -1183,7 +1266,7 @@ async function openSpot(lat, lon, {obs}={}){
     try{
       const [jw, jm] = await Promise.all([
         fetchJSON(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=wind_speed_10m,wind_gusts_10m,wind_direction_10m&models=gem_seamless&wind_speed_unit=kn&timezone=GMT&forecast_days=4&timeformat=unixtime`,{timeout:12000}),
-        fetchJSON(`https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&hourly=wave_height,wave_period&timezone=GMT&forecast_days=4&timeformat=unixtime`,{timeout:12000,tries:2}).catch(()=>null)]);
+        isLandAt(lat, lon).then(land => land ? null : fetchJSON(`https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&hourly=wave_height,wave_period&timezone=GMT&forecast_days=4&timeformat=unixtime`,{timeout:12000,tries:2})).catch(()=>null)]);
       j = jw; j.marine = jm?.hourly || null;
       ls.set(key,{at:Date.now(), j});
     }catch(e){ const c = ls.get(key); if(c){ j=c.j; } }
@@ -1194,6 +1277,7 @@ async function openSpot(lat, lon, {obs}={}){
   })();
   // ocean
   (async()=>{
+    if(await isLandAt(lat, lon)){ const el = $("#spOcean"); if(el){ el.textContent = "On land – no water data here."; const t = el.previousElementSibling; if(t) t.textContent = "Water"; } return; }
     const r = await oceanAt(lat, lon, curTime()).catch(()=>null);
     const el = $("#spOcean"); if(!el) return;
     if(!r || (r.x==null && r.k==null && r.hs==null)){ el.textContent="No model water data here (on land or outside model)."; return; }
@@ -1302,7 +1386,8 @@ $("#btnHome").onclick = ()=> map.setView(HOME.c, HOME.z);
 $("#btnNow").onclick = ()=> setTime(0, true);
 $("#btnRefresh").onclick = ()=>{ gridCache.clear(); for(const k in curCache) delete curCache[k]; for(const k in tideCache) delete tideCache[k]; surfData=null; if(activeKey==="surf") setTimeout(()=>loadSurf(true), 1500); centreTide=null; centreTideSt=null; centreFc=null; centreFcRaw=null; centreCorr=null; lastCentre=null; loadObs(); loadCurStations(); refreshModel(); loadCentreForecast(); };
 $("#btnLoc").onclick = ()=>{ if(!navigator.geolocation) return; navigator.geolocation.getCurrentPosition(p=>{ map.setView([p.coords.latitude,p.coords.longitude], Math.max(map.getZoom(),10)); L.circleMarker([p.coords.latitude,p.coords.longitude],{radius:7,color:"#fff",fillColor:"#2196f3",fillOpacity:1,weight:3,pane:"marks"}).addTo(map); }, ()=>{ $("#note").textContent="Location unavailable."; }, {enableHighAccuracy:true,timeout:10000}); };
-map.on("click", e=>{ if($("#sheet").classList.contains("open")) { closeSheet(); return; } openSpot(e.latlng.lat, e.latlng.lng); });
+map.on("click", e=>{ if($("#sheet").classList.contains("open")) { closeSheet(); return; }
+  if(activeKey==="current") openCurrentSpot(e.latlng.lat, e.latlng.lng); else openSpot(e.latlng.lat, e.latlng.lng); });
 
 // restore prefs
 if(ls.get("tFlow")===false) $("#tFlow").checked=false;
