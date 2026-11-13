@@ -1031,16 +1031,18 @@ function surfSeries(sp, wind, tide){
     let eDeep=0, eShore=0, wsum=0, tBest=0, wBest=0, thSum=0;
     const wrap = sp.wrap || 0;
     for(let a=-60;a<=60;a+=10){ const w = Math.pow(Math.cos(a*D2R),2), dir = D+a; const [H,T] = growth(U, radialFetch(sp,dir), hrs);
-      wsum += w; eDeep += w*H*H; const th = angDiff(dir, sp.normal); const c = Math.cos(Math.max(0, Math.abs(th)-wrap)*D2R);
-      if(c>0 && Math.abs(th) < 90+wrap){ const e = w*H*H*c; eShore += e; thSum += e*th; if(e > wBest){ wBest = e; tBest = T; } } }
+      const wrapT = wrap * Math.max(0, Math.min(1, (T-4)/3));          // short chop barely bends round a point
+      wsum += w; eDeep += w*H*H; const th = angDiff(dir, sp.normal); const c = Math.cos(Math.max(0, Math.abs(th)-wrapT)*D2R);
+      if(c>0 && Math.abs(th) < 90+wrapT){ const e = w*H*H*c; eShore += e; thSum += e*th; if(e > wBest){ wBest = e; tBest = T; } } }
     const Hshore = Math.sqrt(eShore/wsum), Tg = tBest, thNow = eShore>0 ? thSum/eShore : 0;
-    // persistence: once the wind eases, waves already crossing the strait keep arriving (~4 h e-folding)
-    if(i>0){ const decay = Math.exp(-1/4); if(Hshore < seaH*decay){ seaH *= decay; seaT *= 0.985; } else { seaH = Hshore; seaT = Tg; seaD = D; seaTh = thNow; } }
+    // persistence: once the wind eases, waves already crossing the strait keep arriving (~5 h e-folding, period holds)
+    if(i>0){ const decay = Math.exp(-1/5); if(Hshore < seaH*decay){ seaH *= decay; /* leftover swell keeps its period */ } else { seaH = Hshore; seaT = Tg; seaD = D; seaTh = thNow; } }
     else { seaH = Hshore; seaT = Tg; seaD = D; seaTh = thNow; }
     if(iNow<0 || i < iNow || out.length > HOURS) continue;
     const t = wind.t[i]*1000;
     const eta = tide ? (interp(tide.ser, t) ?? 2.5) : 2.5;
-    const Hb = seaH>0.05 && seaT>0 ? 0.39*Math.pow(G,0.2)*Math.pow(seaT*seaH*seaH, 0.4) : 0;
+    const CAL_HB = 0.8;   // calibration: Little River 13 Nov 2026, model 2.6 ft vs observed ~2 ft
+    const Hb = seaH>0.05 && seaT>0 ? CAL_HB*0.39*Math.pow(G,0.2)*Math.pow(seaT*seaH*seaH, 0.4) : 0;
     const bi = breakInfo(sp, Hb, seaT, eta);
     // angle of the wave crest to the beach at the break point (Snell refraction from deep water)
     const C0 = G*seaT/(2*Math.PI), Cb = Math.sqrt(G*Math.max(0.2, Hb/0.78));
@@ -1067,17 +1069,19 @@ function surfSeries(sp, wind, tide){
     if(bi.width > 250){ size *= 0.8; }
     const shapeMult = {"closeout":0.45, "mostly closing":0.7, "peeling":1.2, "fast peel":1.05, "sectiony":0.85, "point":1.3}[shape] ?? 1;
     size *= shapeMult;
+    // period: short-period wind chop is weak and messy; 7 s+ is a proper wave for the Strait
+    const periodMult = seaT <= 4 ? 0.3 : seaT >= 7 ? 1 : seaT < 5 ? 0.3 + (seaT-4)*0.3 : seaT < 6 ? 0.6 + (seaT-5)*0.25 : 0.85 + (seaT-6)*0.15;
+    // surface texture from the wind blowing at the spot right now
+    let textureMult;
+    if(state==="glassy") textureMult = 1;
+    else if(state==="offshore") textureMult = kt<12 ? 1.05 : kt<20 ? 0.85 : 0.6;
+    else { textureMult = kt<5 ? 1 : kt<8 ? 0.9 : kt<12 ? 0.75 : kt<16 ? 0.55 : kt<20 ? 0.45 : 0.35; if(state==="cross-shore") textureMult = Math.min(1, textureMult+0.05); }
+    if((shape==="closeout"||shape==="mostly closing") && state==="onshore" && kt>12) textureMult *= 0.85;   // wind closes it out faster
     let q = 0;
-    if(seaT >= 6) q += 0.3; else if(seaT < 4) q -= 0.4;
     if(bi.type==="plunging") q += 0.2; else if(bi.type==="shorebreak") q -= 0.6;
-    if((shape==="closeout"||shape==="mostly closing") && state==="onshore" && kt>12) q -= 0.5; // wind closes it out faster
-    if(bi.width > 250) q -= 0.5;
-    if(state==="onshore") q -= kt>28?3 : kt>20?2 : kt>12?1 : kt>6?0.5 : 0;
-    else if(state==="cross-shore") q -= kt>25?2 : kt>18?1.25 : kt>12?0.6 : kt>8?0.25 : 0;
-    else if(state==="offshore") q += kt<20 ? 0.5 : -0.5;
-    else q += 0.5;
+    if(bi.width > 250) q -= 0.3;
     const cap = kt > 30 ? 2.5 : kt > 25 ? 3.25 : kt > 20 ? 4.25 : 5;   // strong wind = blown out, however big
-    const stars = size<=0 ? 0 : Math.max(0, Math.min(cap, size + q));
+    const stars = size<=0 ? 0 : Math.max(0, Math.min(cap, size*periodMult*textureMult + q));
     out.push({t, Hb, ft:Hb*3.281, T:seaT, dir:seaD, kt, wdir:D, state, eta, stars, ...bi, shape, thB, th0, hand, peelTo});
   }
   return out;
