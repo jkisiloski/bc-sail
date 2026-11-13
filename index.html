@@ -160,7 +160,7 @@
     <button data-l="windtop" class="on">Wind</button>
     <button data-l="current">Current</button>
     <button data-l="water">Water</button>
-    <button data-l="surf">Surf</button>
+    <button data-l="surf">Ride</button>
   </div>
   <div class="sq" id="btnMenu" title="Layers">≡<div class="dots"><span class="dot" id="sMap"></span><span class="dot" id="sObs"></span><span class="dot" id="sCur"></span></div></div>
 </div>
@@ -168,7 +168,7 @@
   <div class="pill" id="modelPill"><span class="ldot"></span><span id="modelName">HRDPS 2.5 km</span></div>
   <div id="scale"><div class="bar" id="scaleBar"></div><div class="lbl" id="scaleLbl"></div></div>
 </div>
-<div class="row3"><div class="seg subseg" id="windSeg" hidden><button data-w="wind" class="on">Sustained</button><button data-w="gust">Gusts</button></div><div class="seg subseg" id="waterSeg" hidden><button data-w="waves" class="on">Waves</button><button data-w="temp">Temp</button></div><button id="marineChip" class="mchip" hidden></button></div>
+<div class="row3"><div class="seg subseg" id="windSeg" hidden><button data-w="wind" class="on">Sustained</button><button data-w="gust">Gusts</button></div><div class="seg subseg" id="sportSeg" hidden><button data-s="surf" class="on">Surf</button><button data-s="wing">Wing</button><button data-s="kite">Kite</button></div><div class="seg subseg" id="waterSeg" hidden><button data-w="waves" class="on">Waves</button><button data-w="temp">Temp</button></div><button id="marineChip" class="mchip" hidden></button></div>
 <div id="menu">
   <label><input type="checkbox" id="tFlow" checked>Animated flow lines</label>
   <label><input type="checkbox" id="tObs" checked>Observed wind (stations)</label>
@@ -176,6 +176,7 @@
   <label><input type="checkbox" id="tTide" checked>Tide heights (zoom in)</label>
   <label><input type="checkbox" id="tCur" checked>Tidal current stations</label>
   <label><input type="checkbox" id="tSea">Seamarks (OpenSeaMap)</label>
+  <label style="justify-content:space-between">Wing / kite level <select id="selLevel" style="background:#1d262e;color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font:600 13px system-ui"><option value="exp">Experienced</option><option value="learn">Learning</option></select></label>
   <div class="st"><span class="dot" id="sMap2"></span><span id="sMapT">Forecast grid</span><span class="dot" id="sObs2"></span><span id="sObsT">Observations</span><span class="dot" id="sCur2"></span><span id="sCurT">Tide &amp; current stations</span></div>
 </div>
 
@@ -561,6 +562,8 @@ async function refreshModel(){
   if(wantLand && !map.hasLayer(landTop)) landTop.addTo(map); else if(!wantLand && map.hasLayer(landTop)) map.removeLayer(landTop);
   $("#waterSeg").hidden = !(key==="waves"||key==="temp");
   $("#windSeg").hidden = !(key==="wind"||key==="gust");
+  $("#sportSeg").hidden = key!=="surf";
+  document.querySelectorAll("#sportSeg button").forEach(b=>b.classList.toggle("on", b.dataset.s===sport));
   document.querySelectorAll("#windSeg button").forEach(b=>b.classList.toggle("on", b.dataset.w===key));
   document.querySelectorAll("#waterSeg button").forEach(b=>b.classList.toggle("on", b.dataset.w===key));
   setDot("#sMap","load","Loading forecast grid…");
@@ -591,7 +594,7 @@ function setLayer(key){
   activeKey = key; ls.set("layer",key);
   const top = (key==="waves"||key==="temp") ? "water" : (key==="wind"||key==="gust") ? "windtop" : key;
   setTimeout(()=>{ drawTides(); }, 0);
-  if(key==="surf"){ if(map.distance(map.getCenter(),[49.75,-124.95]) > 40000 || map.getZoom() < 10) map.fitBounds(SPOTS.map(sp=>[sp.lat,sp.lon]), {paddingTopLeft:[30,190], paddingBottomRight:[90,250], maxZoom:12}); if(!map.hasLayer(surfLayer)) surfLayer.addTo(map); loadSurf(); }
+  if(key==="surf"){ if(map.distance(map.getCenter(),[49.75,-124.95]) > 40000 || map.getZoom() < 10) map.fitBounds(sportSpots().map(sp=>[sp.lat,sp.lon]), {paddingTopLeft:[30,190], paddingBottomRight:[90,250], maxZoom:12}); if(!map.hasLayer(surfLayer)) surfLayer.addTo(map); loadSurf(); }
   else if(map.hasLayer(surfLayer)) map.removeLayer(surfLayer);
   document.querySelectorAll("#layerSeg button").forEach(b=>b.classList.toggle("on", b.dataset.l===top));
   refreshModel();
@@ -637,9 +640,10 @@ async function loadCentreForecast(){
 }
 function drawBars(){
   const bars = $("#bars"); let html = "";
-  const sp = activeKey==="surf" && surfData ? (surfSel || nearestSpot()) : null, ss = sp ? surfData.res[sp.id]?.series : null;
-  if(ss){ for(let i=0;i<=HOURS;i++){ const r = ss[i]; const lab = (i%4===0 && r && r.ft>=0.8) ? r.ft.toFixed(0) : "";
-      html += `<div style="background:${r?starColor(r.stars):'#1d262e'}">${lab}</div>`; } }
+  const sp = activeKey==="surf" && surfData ? (surfSel || nearestSpot()) : null;
+  if(sp){ for(let i=0;i<=HOURS;i++){ const o = rowFor(sp, i); const lab = (i%4===0 && o) ? o.bar : "";
+      const night = o && o.r && o.r.day===false;
+      html += `<div style="background:${o?(night?'#141b21':starColor(o.stars)):'#1d262e'}">${lab}</div>`; } }
   else for(let i=0;i<=HOURS;i++){ const f = centreFc?.[i]; const lab = (i%4===0 && f) ? Math.round(f.w) : "";
     html += `<div style="background:${f?windColor(f.w):'#1d262e'}">${lab}</div>`; }
   bars.innerHTML = html;
@@ -651,6 +655,14 @@ function drawBars(){
 }
 function updateSummary(){
   const d = curTime(); const f = centreFc?.[tIdx];
+  if(activeKey==="surf" && sport!=="surf"){
+    const sp = surfSel || nearestSpot(), o = rowFor(sp, tIdx), r = o?.r;
+    $("#sumMain").innerHTML = r ? `${sp.name} · <span style="color:${starColor(r.stars)}">${starStr(r.stars)}</span>` : (surfLoading ? "Running model…" : "Loading…");
+    $("#sumSub").textContent = r ? `${fmtTime(d,{weekday:"short",hour:"numeric"})}${tIdx===0?" (now)":" · +"+tIdx+" h"} · ${kn(r.kt)}–${kn(r.gk)} kn ${compass(r.D)} ${r.dirLab}` : `Experimental ${SPORTS[sport].name.toLowerCase()} score`;
+    $("#sumSea").hidden = true;
+    $("#sumTide").innerHTML = r ? `${r.unsafe?'<span style="color:#ef5350">⚠ offshore – unsafe</span> · ':""}<span class="tw">≈</span> tide ${r.eta.toFixed(1)} m${r.why.filter(w=>!/offshore/.test(w)).length?" · "+r.why.filter(w=>!/offshore/.test(w)).join(" · "):""}` : "";
+    return;
+  }
   if(activeKey==="surf"){
     const sp = surfSel || nearestSpot(), r = surfData?.res[sp.id]?.series?.[tIdx];
     $("#sumMain").innerHTML = r ? `${sp.name.replace(/ \(.*\)/,"")} · <span style="color:${starColor(r.stars)}">${ftRange(r.ft)}</span> <span style="color:${starColor(r.stars)};font-size:12px">${starStr(r.stars)}</span>` : (surfLoading ? "Running surf model…" : "Surf model loading…");
@@ -986,7 +998,7 @@ function openMarine(){
    decaying after the wind eases; breaking height via Komar–Gaughan; tide + profile
    decide break position/type. Uncalibrated – treat as a guide only. */
 // kind: "beach" (default) or "point"; wrap = how many degrees of swell a point bends around itself
-const SPOTS = [{"id":"goose","name":"Goose Spit","lat":49.664,"lon":-124.902,"normal":159,"fetch":[2,2,2,2,2,34,24,22,26,32,38,50,152,20,13,10,20,11,6,5,4,4,3,4,4,5,5,6,6,5,3,3,2,2,2,2],"prof":[[0.05,2.4],[0.15,1.2],[0.275,-1.2],[0.425,-2.5],[0.625,-3.7],[0.875,-22.6],[1.25,-41.9],[2,-42.3]]},{"id":"holmes","name":"Point Holmes","lat":49.692,"lon":-124.868,"normal":110,"fetch":[2,28,32,31,23,31,20,19,20,26,32,46,42,78,21,39,13,14,16,11,9,8,2,2,2,2,2,2,2,2,2,2,2,2,2,2],"prof":[[0.275,0],[0.425,-0.6],[0.625,-7.9],[0.875,-9.3],[1.25,-10.8],[2,-10.7]]},{"id":"kye","name":"Kye Bay","lat":49.707,"lon":-124.871,"normal":70,"fetch":[51,35,30,29,24,30,29,20,18,23,30,42,43,82,25,25,15,16,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,43,52,39],"prof":[[0.15,3.7],[0.275,3.7],[0.425,4.5],[0.625,1.8],[0.875,-4.3],[1.25,-4.3],[2,-16.1]]},{"id":"kin","name":"Kin Beach","lat":49.728,"lon":-124.897,"normal":45,"fetch":[28,35,30,29,29,22,30,21,21,21,29,39,48,86,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,5,35,38,49,35],"prof":[[0.15,4.3],[0.275,1.5],[0.425,-2.1],[0.625,-5.2],[0.875,-5.9],[1.25,-6.9],[2,-58.7]]},{"id":"denny","name":"Little River (Denny Rd)","lat":49.738,"lon":-124.906,"normal":40,"kind":"point","wrap":50,"fetch":[26,35,30,28,28,24,30,30,22,21,29,37,54,87,29,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,7,36,36,48,32],"prof":[[0.05,-1.8],[0.15,-7.3],[0.275,-15.6],[0.425,-31.1],[0.625,-28.7],[0.875,-47.5],[1.25,-51.2],[2,-55.6]]},{"id":"bates","name":"Bates Beach","lat":49.775,"lon":-124.975,"normal":49,"fetch":[30,22,32,29,28,28,30,24,34,26,26,40,60,96,4,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,6,30,46,32],"prof":[[0.15,-1.1],[0.275,-6.1],[0.425,-8.8],[0.625,-11],[0.875,-19.2],[1.25,-42.1],[2,-58.4]]},{"id":"kitty","name":"Kitty Coleman","lat":49.789,"lon":-124.996,"normal":52,"fetch":[27,23,42,29,22,28,30,26,35,27,27,41,62,99,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,28,42,44],"prof":[[0.15,-0.5],[0.275,-4.6],[0.425,-5.3],[0.625,-8.4],[0.875,-31.1],[1.25,-32.9],[2,-71.3]]},{"id":"williams","name":"Williams Beach","lat":49.835,"lon":-125.059,"normal":42,"fetch":[26,28,28,19,28,28,28,31,35,39,32,34,75,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,7,40,21,35],"prof":[[0.275,-1.5],[0.425,-4],[0.625,-9.8],[0.875,-8.8],[1.25,-65.6],[2,-87.5]]}];
+const SPOTS = [{"id":"goose","name":"Goose Spit (outside)","lat":49.664,"lon":-124.902,"normal":159,"fetch":[2,2,2,2,2,34,24,22,26,32,38,50,152,20,13,10,20,11,6,5,4,4,3,4,4,5,5,6,6,5,3,3,2,2,2,2],"prof":[[0.05,2.4],[0.15,1.2],[0.275,-1.2],[0.425,-2.5],[0.625,-3.7],[0.875,-22.6],[1.25,-41.9],[2,-42.3]]},{"id":"gooseIn","name":"Goose Spit (inside)","lat":49.6633,"lon":-124.906,"normal":0,"surf":false,"enclosed":true,"fetch":[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],"prof":[[0.025,2.1],[0.075,1],[0.15,-2.1],[0.25,-2.1],[0.375,-0.7],[0.525,2.6]]},{"id":"holmes","name":"Point Holmes","lat":49.692,"lon":-124.868,"normal":110,"fetch":[2,28,32,31,23,31,20,19,20,26,32,46,42,78,21,39,13,14,16,11,9,8,2,2,2,2,2,2,2,2,2,2,2,2,2,2],"prof":[[0.275,0],[0.425,-0.6],[0.625,-7.9],[0.875,-9.3],[1.25,-10.8],[2,-10.7]]},{"id":"kye","name":"Kye Bay","lat":49.707,"lon":-124.871,"normal":70,"fetch":[51,35,30,29,24,30,29,20,18,23,30,42,43,82,25,25,15,16,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,43,52,39],"prof":[[0.15,3.7],[0.275,3.7],[0.425,4.5],[0.625,1.8],[0.875,-4.3],[1.25,-4.3],[2,-16.1]]},{"id":"kin","name":"Kin Beach","lat":49.728,"lon":-124.897,"normal":45,"fetch":[28,35,30,29,29,22,30,21,21,21,29,39,48,86,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,5,35,38,49,35],"prof":[[0.15,4.3],[0.275,1.5],[0.425,-2.1],[0.625,-5.2],[0.875,-5.9],[1.25,-6.9],[2,-58.7]]},{"id":"denny","name":"Little River (Denny Rd)","lat":49.738,"lon":-124.906,"normal":40,"kind":"point","wrap":50,"fetch":[26,35,30,28,28,24,30,30,22,21,29,37,54,87,29,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,7,36,36,48,32],"prof":[[0.05,-1.8],[0.15,-7.3],[0.275,-15.6],[0.425,-31.1],[0.625,-28.7],[0.875,-47.5],[1.25,-51.2],[2,-55.6]]},{"id":"bates","name":"Bates Beach","lat":49.775,"lon":-124.975,"normal":49,"fetch":[30,22,32,29,28,28,30,24,34,26,26,40,60,96,4,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,6,30,46,32],"prof":[[0.15,-1.1],[0.275,-6.1],[0.425,-8.8],[0.625,-11],[0.875,-19.2],[1.25,-42.1],[2,-58.4]]},{"id":"kitty","name":"Kitty Coleman","lat":49.789,"lon":-124.996,"normal":52,"fetch":[27,23,42,29,22,28,30,26,35,27,27,41,62,99,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,28,42,44],"prof":[[0.15,-0.5],[0.275,-4.6],[0.425,-5.3],[0.625,-8.4],[0.875,-31.1],[1.25,-32.9],[2,-71.3]]},{"id":"williams","name":"Williams Beach","lat":49.835,"lon":-125.059,"normal":42,"fetch":[26,28,28,19,28,28,28,31,35,39,32,34,75,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,7,40,21,35],"prof":[[0.275,-1.5],[0.425,-4],[0.625,-9.8],[0.875,-8.8],[1.25,-65.6],[2,-87.5]]}];
 const G = 9.81, D2R = Math.PI/180;
 const angDiff = (a,b) => { const d = ((a-b)%360+540)%360-180; return d; };
 function movePt(lat, lon, brg, km){ return [lat+Math.cos(brg*D2R)*km/111.32, lon+Math.sin(brg*D2R)*km/(111.32*Math.cos(lat*D2R))]; }
@@ -1086,6 +1098,114 @@ function surfSeries(sp, wind, tide){
   }
   return out;
 }
+
+/* ============ EXPERIMENTAL wing-foil / kite scores ============ */
+const WIND_SPOTS = ["goose","gooseIn","kye","denny"];
+// Wind windows from published guidance (kite: ~12 kn minimum, 15–25 sweet spot, 15–20 for beginners, >30 hard to control;
+// wing: learn in ~13–22, 15–20 ideal for learners, beginner kit comfortable 15–24). Gust spread ≤5 kn counts as normal.
+const LEVELS = {
+  exp:   {wing:{min:12, lo:15, hi:25, max:32}, kite:{min:12, lo:15, hi:25, max:32}},
+  learn: {wing:{min:12, lo:15, hi:20, max:24}, kite:{min:12, lo:15, hi:20, max:24}}
+};
+let level = ls.get("level") || "exp";
+const SPORTS = {
+  wing: {name:"Wing foil", depth:1.2, onshore:0.85},
+  kite: {name:"Kite",      depth:0.8, onshore:0.7}
+};
+function applyLevel(){ for(const k of Object.keys(SPORTS)) Object.assign(SPORTS[k], LEVELS[level][k]); }
+applyLevel();
+let sport = ls.get("sport") || "surf";
+const sportSpots = () => sport==="surf" ? SPOTS.filter(sp=>sp.surf!==false) : SPOTS.filter(sp=>WIND_SPOTS.includes(sp.id));
+function sunAlt(ms, lat, lon){ // degrees above horizon
+  const d = ms/864e5 - 10957.5, g = (357.529+0.98560028*d)*D2R, q = 280.459+0.98564736*d;
+  const L = (q + 1.915*Math.sin(g) + 0.020*Math.sin(2*g))*D2R, e = (23.439-0.00000036*d)*D2R;
+  const ra = Math.atan2(Math.cos(e)*Math.sin(L), Math.cos(L)), dec = Math.asin(Math.sin(e)*Math.sin(L));
+  const gmst = ((18.697374558 + 24.06570982441908*d)%24+24)%24, ha = (gmst*15 + lon)*D2R - ra;
+  return Math.asin(Math.sin(lat*D2R)*Math.sin(dec) + Math.cos(lat*D2R)*Math.cos(dec)*Math.cos(ha))/D2R;
+}
+function windSportSeries(sp, wind, tide, surf, key){
+  const S = SPORTS[key], out = [];
+  const iNow = wind.t.findIndex(t => t >= +t0/1000);
+  for(let i=Math.max(0,iNow); i<wind.t.length && out.length<=HOURS; i++){
+    const t = wind.t[i]*1000, kt = wind.u[i]*MS2KT, gk = (wind.g?.[i] ?? wind.u[i]*1.3)*MS2KT, D = wind.d[i];
+    const eta = tide ? (interp(tide.ser, t) ?? 2.5) : 2.5;
+    // speed in the usable window
+    let sp0 = kt<S.min ? 0 : kt<S.lo ? 1+3*(kt-S.min)/(S.lo-S.min) : kt<=S.hi ? 4 : kt<=S.max ? 4-3*(kt-S.hi)/(S.max-S.hi) : 0;
+    const why = [];
+    if(kt<S.min) why.push("too light"); else if(kt>S.max) why.push("too strong"); else if(level==="learn" && kt>S.hi) why.push("strong for learning");
+    // gustiness: spread between gusts and average (≤5 kn is normal)
+    const spread = gk - kt; const gr = gk/Math.max(kt,1);
+    let gF = sp.enclosed && level==="exp" ? (spread<=8?1 : spread<=12?0.85 : 0.65) : (spread<=5?1 : spread<=8?0.85 : spread<=12?0.65 : 0.45);
+    if(gk>S.max+5){ gF*=0.5; why.push("big gusts"); } else if(spread>8) why.push(`gusty (+${Math.round(spread)} kn)`);
+    // direction relative to the beach (0 = straight onshore, 180 = offshore)
+    const rel = Math.abs(angDiff(D, sp.normal));
+    let dirLab, dF, unsafe=false;
+    if(rel<20){ dirLab="onshore"; dF=S.onshore; }
+    else if(rel<70){ dirLab="side-on"; dF=1; }
+    else if(rel<=100){ dirLab="side-shore"; dF=0.95; }
+    else if(rel<=125){ dirLab = sp.enclosed ? "across the spit" : "side-off"; dF = sp.enclosed ? (level==="exp"?1:0.7) : 0.4; if(!sp.enclosed) why.push("side-off"); }
+    else if(sp.enclosed){ dirLab="over the spit (enclosed)"; dF = level==="exp" ? 0.95 : 0.6; if(level==="learn") why.push("gusty off-the-land wind"); }
+    else { dirLab="offshore"; dF=0; unsafe=true; why.push("offshore – unsafe"); }
+    // water depth: how far you walk before there's enough water
+    let walk=null; for(let x=0; x<=0.6; x+=0.01){ if(eta - zAt(sp,x) >= S.depth){ walk=x; break; } }
+    const dpF = walk===null ? 0 : walk<=0.15 ? 1 : walk<=0.35 ? 0.75 : 0.4;
+    if(walk===null) why.push("too shallow"); else if(walk>0.15) why.push(`walk ~${Math.round(walk*1000/50)*50} m`);
+    const day = sunAlt(t, sp.lat, sp.lon) > -2;   // ~15 min after sunset
+    let stars = sp0*gF*dF*dpF;
+    if(stars>0 && kt>=S.lo && kt<=S.hi && spread<=6 && dF>=0.95 && dpF===1) stars += 1;
+    if(stars>0 && sp.enclosed && level==="exp" && kt>=20 && dpF>=0.75){ stars += 0.75; why.push("big-wind flat water"); }
+    if(!day){ stars = 0; why.unshift("dark"); }
+    const water = sp.surf===false ? "flat water" : surf?.[out.length] ? (surf[out.length].ft<0.8 ? "small chop" : `waves ${ftRange(surf[out.length].ft)}`) : "";
+    out.push({t, kt, gk, D, eta, stars:Math.max(0,Math.min(5,stars)), dirLab, unsafe, walk, why, day, water, spread});
+  }
+  return out;
+}
+const kn = v => Math.round(v);
+function rowFor(sp, i){ // what pins/timeline/summary show for the active sport
+  const d = surfData?.res[sp.id]; if(!d) return null;
+  if(sport==="surf"){ const r = d.series?.[i]; return r && {stars:r.stars, big:ftRange(r.ft), small: r.ft<0.8 ? "flat" : ftRange(r.ft).replace(" ft",""), bar: r.ft>=0.8 ? r.ft.toFixed(0) : "", r}; }
+  const r = d[sport]?.[i]; return r && {stars:r.stars, big:`${kn(r.kt)}–${kn(r.gk)} kn`, small: `${kn(r.kt)} kn`, bar: kn(r.kt), r, warn:r.unsafe};
+}
+function openWindSport(sp){
+  const d = surfData?.res[sp.id]; if(!d) return; const S = d[sport], meta = SPORTS[sport]; const sh = $("#sheet");
+  const now = S[tIdx];
+  const wins=[]; let cur=null; S.forEach((r,i)=>{ if(r.stars>=2.5){ if(!cur) cur={a:i,b:i,best:r}; else { cur.b=i; if(r.stars>cur.best.stars) cur.best=r; } } else if(cur){ wins.push(cur); cur=null; } }); if(cur) wins.push(cur);
+  let hdr="<tr><th class='rowlab'>Local</th>", rW="<tr><td class='rowlab'>Wind kn</td>", rG="<tr><td class='rowlab'>Gust</td>", rD="<tr><td class='rowlab'>Dir</td>", rS="<tr><td class='rowlab'>Score</td>", rX="<tr><td class='rowlab'>Tide m</td>";
+  S.forEach((r,i)=>{ const dt=new Date(r.t), mid=localHour(dt)===0, cls=(mid?"d ":"")+(i===tIdx?"now":"");
+    hdr += `<th class="${mid?'d':''}">${mid? fmtDay(dt).split(" ")[0] : fmtTime(dt,{hour:"numeric"}).replace(/\s?[ap]\.?m\.?/i,m=>m.trim()[0].toLowerCase())}</th>`;
+    rW += `<td class="${cls}" style="background:${windColor(r.kt)};color:#fff;font-weight:700;opacity:${r.day?1:0.45}">${kn(r.kt)}</td>`;
+    rG += `<td class="${cls}" style="color:${windColor(r.gk)};font-weight:700">${kn(r.gk)}</td>`;
+    rD += `<td class="${cls}" title="${r.dirLab}">${arrowSVG((r.D+180)%360, r.unsafe?"#ef5350":r.dirLab.startsWith("side-on")||r.dirLab==="side-shore"?"#9ccc65":"#cfe3f3",14)}</td>`;
+    rS += `<td class="${cls}" style="background:${r.day?starColor(r.stars):'#141b21'};color:#fff;font-weight:700">${r.unsafe&&r.day?"⚠":r.day?(r.stars>=0.5?Math.round(r.stars):""):"☾"}</td>`;
+    rX += `<td class="${cls}" style="color:#7fb6d3">${r.eta.toFixed(1)}</td>`; });
+  const fmtWin = w => `<div><span><b>${fmtTime(new Date(S[w.a].t),{weekday:"short",hour:"numeric"})}</b> – ${fmtTime(new Date(S[w.b].t+3600e3),{hour:"numeric"})}</span><span style="color:${starColor(w.best.stars)}">${kn(w.best.kt)}–${kn(w.best.gk)} kn ${starStr(w.best.stars)}</span></div>`;
+  sh.innerHTML = sheetHead(sp.name, `Experimental ${meta.name.toLowerCase()} score · beach faces ${compass(sp.normal)}`) +
+    (now.unsafe ? `<div class="mwarn" style="background:rgba(130,20,20,.6);border-color:#ef5350">⚠ Offshore wind at this time – you'd be blown away from the beach</div>` : "") +
+    `<div class="kv"><div><span>At ${fmtTime(curTime(),{weekday:"short",hour:"numeric"})}</span><b style="color:${starColor(now.stars)}">${starStr(now.stars)}</b><span>${now.why.length? now.why.join(" · ") : "good conditions"}</span></div>
+      <div><span>Wind</span><b>${kn(now.kt)}–${kn(now.gk)} kn</b><span>${compass(now.D)} · ${now.dirLab}</span></div>
+      <div><span>Tide (${d.tideName||"nearest"})</span><b>${now.eta.toFixed(1)} m</b><span>${now.walk===null ? "not enough water near shore" : now.walk<=0.15 ? "water at the beach" : "walk out ~"+Math.round(now.walk*1000/50)*50+" m"}</span></div>
+      <div><span>Water</span><b style="font-size:16px">${now.water||"–"}</b><span>${meta.name} (${level==="exp"?"experienced":"learning"}): best ${meta.lo}–${meta.hi} kn</span></div></div>
+     <div class="sec-t">Next 48 h</div><div class="strip"><table>${hdr}</tr>${rW}</tr>${rG}</tr>${rD}</tr>${rS}</tr>${rX}</tr></table></div>
+     <div class="sec-t">Best windows (≥ 3★, daylight)</div><div class="ev">${wins.length? wins.slice(0,6).map(fmtWin).join("") : "<div class='s'>No good windows in the next 48 h</div>"}</div>
+     <div class="muted" style="padding-top:10px;line-height:1.5"><b>Experimental.</b> Scores forecast wind strength (${level==="exp"?"experienced":"learning"}: usable ${meta.min}–${meta.max} kn, best ${meta.lo}–${meta.hi}), gust spread (≤5 kn is normal), direction to the beach (offshore = 0), water depth at your launch for the tide (CHS NONNA seabed + CHS tide) and daylight. ${sp.enclosed?"Inside the spit, wind blows across the spit into the enclosed harbour: flat water and a solid breeze, a favourite on big-wind days, but gustier off the land.":""} Change rider level in the ≡ menu. Always check conditions yourself.</div>`;
+  sh.classList.add("open"); sh.scrollTop=0;
+  const st = sh.querySelector(".strip"), nc = st?.querySelector("td.now"); if(nc) st.scrollLeft = Math.max(0, nc.offsetLeft-80);
+}
+function setLevel(v){
+  level = v; ls.set("level", v); applyLevel();
+  if(surfData) for(const sp of SPOTS) if(WIND_SPOTS.includes(sp.id)){ const d = surfData.res[sp.id]; if(!d?.inp) continue;
+    for(const k of Object.keys(SPORTS)) d[k] = windSportSeries(sp, d.inp.wind, d.inp.tide, sp.surf===false?null:d.series, k); }
+  drawSurf(); drawBars(); updateSummary(); if($("#sheet").classList.contains("open") && sport!=="surf" && surfSel) openWindSport(surfSel);
+}
+function setSport(s){
+  sport = s; ls.set("sport", s); surfSel = null;
+  document.querySelectorAll("#sportSeg button").forEach(b=>b.classList.toggle("on", b.dataset.s===s));
+  closeSheet();
+  const pts = sportSpots().map(sp=>[sp.lat,sp.lon]);
+  if(activeKey==="surf") map.fitBounds(pts, {paddingTopLeft:[30,190], paddingBottomRight:[90,250], maxZoom: s==="surf"?12:13});
+  drawSurf(); drawBars(); updateSummary();
+}
+
 let surfData = null, surfSel = null, surfLoading = false;
 const surfLayer = L.layerGroup();
 const ftRange = ft => ft < 0.8 ? "flat" : ft < 1.5 ? "1 ft" : `${Math.floor(ft)}–${Math.ceil(ft+0.5)} ft`;
@@ -1096,27 +1216,30 @@ async function loadSurf(force){
   surfLoading = true; setDot("#sMap","load","Loading surf model inputs…");
   try{
     const off = SPOTS.map(sp => movePt(sp.lat, sp.lon, sp.normal, 1.5));
-    const j = await fetchJSON(`https://api.open-meteo.com/v1/forecast?latitude=${off.map(p=>p[0].toFixed(3)).join(",")}&longitude=${off.map(p=>p[1].toFixed(3)).join(",")}&hourly=wind_speed_10m,wind_direction_10m&models=gem_seamless&wind_speed_unit=ms&timezone=GMT&past_hours=24&forecast_hours=50&timeformat=unixtime`,{timeout:15000});
+    const j = await fetchJSON(`https://api.open-meteo.com/v1/forecast?latitude=${off.map(p=>p[0].toFixed(3)).join(",")}&longitude=${off.map(p=>p[1].toFixed(3)).join(",")}&hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m&models=gem_seamless&wind_speed_unit=ms&timezone=GMT&past_hours=24&forecast_hours=50&timeformat=unixtime`,{timeout:15000});
     const arr = Array.isArray(j) ? j : [j];
     if(!tideStations.length) await loadCurStations();
     const res = {};
     for(let i=0;i<SPOTS.length;i++){ const sp = SPOTS[i], h = arr[i].hourly;
       let tide = null; const ts = nearestTideStation(sp.lat, sp.lon); if(ts){ try{ tide = await getTideSeries(ts); }catch(e){} }
-      res[sp.id] = {series: surfSeries(sp, {t:h.time, u:h.wind_speed_10m, d:h.wind_direction_10m}, tide), tideName: ts?.name}; }
+      const wind = {t:h.time, u:h.wind_speed_10m, d:h.wind_direction_10m, g:h.wind_gusts_10m};
+      const series = surfSeries(sp, wind, tide);
+      res[sp.id] = {series, tideName: ts?.name, inp:{wind, tide}};
+      if(WIND_SPOTS.includes(sp.id)) for(const k of Object.keys(SPORTS)) res[sp.id][k] = windSportSeries(sp, wind, tide, sp.surf===false?null:series, k); }
     surfData = {at:Date.now(), res};
     setDot("#sMap","ok","Surf model updated");
   }catch(e){ console.error("surf model:", e); setDot("#sMap","bad","Surf model inputs failed – tap ⟳"); }
   surfLoading = false; drawSurf(); drawBars(); updateSummary();
 }
-function nearestSpot(){ const c = map.getCenter(); let b=null, bd=1e12; for(const sp of SPOTS){ const d = map.distance(c,[sp.lat,sp.lon]); if(d<bd){ bd=d; b=sp; } } return b; }
+function nearestSpot(){ const c = map.getCenter(); let b=null, bd=1e12; for(const sp of sportSpots()){ const d = map.distance(c,[sp.lat,sp.lon]); if(d<bd){ bd=d; b=sp; } } return b; }
 function drawSurf(){
   surfLayer.clearLayers(); if(activeKey!=="surf" || !surfData) return;
-  for(const sp of SPOTS){ const r = surfData.res[sp.id]?.series?.[tIdx]; if(!r) continue;
-    const big = map.getZoom() >= 12, col = starColor(r.stars), sz = r.ft<0.8 ? "flat" : ftRange(r.ft).replace(" ft","");
-    const html = big ? `<div class="surfpin" style="border-color:${col}"><b>${ftRange(r.ft)}</b><span style="color:${col}">${starStr(r.stars)}</span><small>${sp.name.replace(/ \(.*\)/,"")}</small></div>`
-                     : `<div class="surfpin sm" style="border-color:${col};background:${col}"><b>${sz}</b>${r.stars>=0.5?`<span>★${Math.round(r.stars)}</span>`:""}</div>`;
-    L.marker([sp.lat,sp.lon],{pane:"marks", icon:L.divIcon({className:"", html, iconSize: big?[92,46]:[50,22], iconAnchor: big?[46,52]:[25,11]})})
-      .on("click", ev=>{ L.DomEvent.stopPropagation(ev); surfSel = sp; drawBars(); updateSummary(); openSurf(sp); }).addTo(surfLayer); }
+  for(const sp of sportSpots()){ const o = rowFor(sp, tIdx); if(!o) continue;
+    const big = map.getZoom() >= 12, col = starColor(o.stars), nm = sp.name.replace(/ \((.*)\)/, (m,a)=> /inside|outside/.test(a) ? " "+a : "");
+    const html = big ? `<div class="surfpin" style="border-color:${o.warn?"#ef5350":col}"><b>${o.warn?"⚠ ":""}${o.big}</b><span style="color:${col}">${starStr(o.stars)}</span><small>${nm}</small></div>`
+                     : `<div class="surfpin sm" style="border-color:${o.warn?"#ef5350":col};background:${o.warn?"#7a1f1f":col}"><b>${o.warn?"⚠":""}${o.small}</b>${o.stars>=0.5?`<span>★${Math.round(o.stars)}</span>`:""}</div>`;
+    L.marker([sp.lat,sp.lon],{pane:"marks", icon:L.divIcon({className:"", html, iconSize: big?[92,46]:[60,22], iconAnchor: sp.id==="goose" ? (big?[46,-8]:[30,-6]) : sp.id==="gooseIn" ? (big?[46,54]:[30,28]) : (big?[46,52]:[30,11])})})
+      .on("click", ev=>{ L.DomEvent.stopPropagation(ev); surfSel = sp; drawBars(); updateSummary(); sport==="surf" ? openSurf(sp) : openWindSport(sp); }).addTo(surfLayer); }
 }
 function openSurf(sp){
   const d = surfData?.res[sp.id]; if(!d) return;
@@ -1359,6 +1482,8 @@ function drawSpark(cv, d, sel){
 /* ============ wiring ============ */
 document.querySelectorAll("#layerSeg button").forEach(b=>b.onclick=()=>setLayer(b.dataset.l));
 document.querySelectorAll("#waterSeg button, #windSeg button").forEach(b=>b.onclick=()=>setLayer(b.dataset.w));
+document.querySelectorAll("#sportSeg button").forEach(b=>b.onclick=()=>setSport(b.dataset.s));
+$("#selLevel").value = level; $("#selLevel").onchange = ()=> setLevel($("#selLevel").value);
 $("#marineChip").onclick = e=>{ e.stopPropagation(); openMarine(); };
 $("#btnMenu").onclick = e=>{ e.stopPropagation(); $("#menu").classList.toggle("open"); };
 document.addEventListener("click", e=>{ if(!$("#menu").contains(e.target) && e.target!==$("#btnMenu")) $("#menu").classList.remove("open"); });

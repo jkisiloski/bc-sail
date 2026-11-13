@@ -1,5 +1,5 @@
 // BC Sail service worker: app shell cache-first, data network-first with offline fallback.
-const V = "bcsail-v14";
+const V = "bcsail-v16";
 const SHELL = ["./", "index.html", "manifest.json", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png",
   "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css",
   "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js",
