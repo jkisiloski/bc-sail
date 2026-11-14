@@ -638,7 +638,10 @@ async function loadCentreForecast(){
   applyCorrection(); drawBars(); updateSummary();
   refreshCorrection();
 }
+const pastHours = () => localHour(t0);            // hours of today already gone; shown in the tide row, left of the forecast bar
 function drawBars(){
+  const P = pastHours(), total = P + HOURS + 1;
+  document.querySelector(".strip2").style.marginLeft = (P/total*100).toFixed(3)+"%";
   const bars = $("#bars"); let html = "";
   const sp = activeKey==="surf" && surfData ? (surfSel || nearestSpot()) : null;
   if(sp){ for(let i=0;i<=HOURS;i++){ const o = rowFor(sp, i); const lab = (i%4===0 && o) ? o.bar : "";
@@ -648,8 +651,8 @@ function drawBars(){
     html += `<div style="background:${f?windColor(f.w):'#1d262e'}">${lab}</div>`; }
   bars.innerHTML = html;
   let days = "";
-  for(let i=0;i<=HOURS;i++){ const d = new Date(+t0+i*3600e3), hr = localHour(d), pct = (i+0.5)/(HOURS+1)*100;
-    if(hr===0) days += `<span class="d" style="left:${pct}%">${fmtDay(d).split(" ")[0]}</span>`;
+  for(let i=-P;i<=HOURS;i++){ const d = new Date(+t0+i*3600e3), hr = localHour(d), pct = (i+P+0.5)/total*100;
+    if(hr===0) days += `<span class="d" style="left:${Math.max(pct,3)}%">${fmtDay(d).split(" ")[0]}</span>`;
     else if(hr===12) days += `<span style="left:${pct}%">12</span>`; }
   $("#days").innerHTML = days;
 }
@@ -816,11 +819,11 @@ let tideStations = [];
 const tideCache = {};
 async function getTideSeries(s){
   if(tideCache[s.id]) return tideCache[s.id];
-  const key = "tide:"+s.id+":"+t0.toISOString().slice(0,13);
+  const key = "tide2:"+s.id+":"+t0.toISOString().slice(0,13);
   const saved = ls.get(key); if(saved){ tideCache[s.id]=saved; return saved; }
-  const from = isoZ(new Date(+t0-3*3600e3)), to = isoZ(new Date(+t0+(HOURS+3)*3600e3));
+  const from = isoZ(new Date(+t0-25*3600e3)), to = isoZ(new Date(+t0+(HOURS+3)*3600e3));   // back to cover all of today
   const wl = await enqueue(()=>fetchJSON(`${IWLS}/stations/${s.id}/data?time-series-code=wlp&from=${from}&to=${to}&resolution=FIFTEEN_MINUTES`));
-  const hl = await enqueue(()=>fetchJSON(`${IWLS}/stations/${s.id}/data?time-series-code=wlp-hilo&from=${isoZ(new Date(+t0-12*3600e3))}&to=${to}`)).catch(()=>[]);
+  const hl = await enqueue(()=>fetchJSON(`${IWLS}/stations/${s.id}/data?time-series-code=wlp-hilo&from=${isoZ(new Date(+t0-31*3600e3))}&to=${to}`)).catch(()=>[]);
   const ser = wl.map(x=>[+new Date(x.eventDate), x.value]);
   if(!ser.length) throw new Error("no predictions");
   // classify hi/lo by comparing to neighbours
@@ -868,17 +871,19 @@ async function loadCentreTide(){
 function drawTideRow(){
   const el = $("#tideRow");
   if(!centreTide){ el.innerHTML = `<span class="tlab">${centreTideSt? "Tide · "+centreTideSt.name+" …" : ""}</span>`; return; }
-  const a = +t0, z = +t0 + HOURS*3600e3, W = 1000, Hh = 40;
-  const pts = centreTide.ser.filter(p=>p[0]>=a-900e3 && p[0]<=z+900e3);
+  const P = pastHours(), total = P + HOURS + 1, W = 1000, Hh = 40, cw = W/total;
+  const a = +t0 - (P+0.5)*3600e3, z = +t0 + (HOURS+0.5)*3600e3;         // from local midnight today to the end of the forecast
+  const pts = centreTide.ser.filter(p=>p[0]>=a && p[0]<=z);
+  if(pts.length<2){ el.innerHTML = ""; return; }
   const hs = pts.map(p=>p[1]); const mn = Math.min(...hs), mx = Math.max(...hs), rg = (mx-mn)||1;
-  const X = t => ((t-a)/(z-a))*W*(HOURS/(HOURS+1)) + W/(HOURS+1)/2, Y = v => Hh-3 - (v-mn)/rg*(Hh-8);
+  const X = t => ((t - +t0)/3600e3 + P + 0.5)*cw, Y = v => Hh-3 - (v-mn)/rg*(Hh-8);
   const d = pts.map((p,i)=>(i?"L":"M")+X(p[0]).toFixed(1)+","+Y(p[1]).toFixed(1)).join("");
   const area = d + `L${X(pts.at(-1)[0]).toFixed(1)},${Hh}L${X(pts[0][0]).toFixed(1)},${Hh}Z`;
-  let marks = "", labs = "";
-  for(const e of centreTide.ev){ if(e.t<a||e.t>z) continue; const x=X(e.t), y=Y(e.v);
-    marks += `<circle cx="${x}" cy="${y}" r="4" fill="${e.hi?'#4fc3f7':'#9fb3c1'}" vector-effect="non-scaling-stroke"/>`;
-    labs += `<span class="tv ${e.hi?'hi':'lo'}" style="left:${(x/W*100).toFixed(2)}%;top:${e.hi? (y/Hh*100+14):(y/Hh*100-48)}%">${e.v.toFixed(1)}</span>`; }
-  el.innerHTML = `<svg viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="none"><path d="${area}" fill="rgba(79,195,247,.16)"/><path d="${d}" fill="none" stroke="#4fc3f7" stroke-width="2.5" vector-effect="non-scaling-stroke"/></svg>${labs}<span class="tlab">Tide · ${centreTideSt.name} (m)</span>`;
+  let labs = "";
+  for(const e of centreTide.ev){ if(e.t<a||e.t>z) continue; const x=X(e.t), y=Y(e.v), past = e.t < Date.now();
+    labs += `<span class="tv ${e.hi?'hi':'lo'}" style="left:${Math.min(97,Math.max(3,x/W*100)).toFixed(2)}%;top:${e.hi? (y/Hh*100+14):(y/Hh*100-48)}%;opacity:${past?0.65:1}">${e.v.toFixed(1)}</span>`; }
+  const xNow = X(Date.now());
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="none"><path d="${area}" fill="rgba(79,195,247,.16)"/><path d="${d}" fill="none" stroke="#4fc3f7" stroke-width="2.5" vector-effect="non-scaling-stroke"/>${P>0?`<rect x="0" y="0" width="${xNow.toFixed(1)}" height="${Hh}" fill="rgba(10,15,20,.5)"/>`:""}<line x1="${xNow.toFixed(1)}" x2="${xNow.toFixed(1)}" y1="0" y2="${Hh}" stroke="#fff" stroke-width="1.5" stroke-opacity=".8" vector-effect="non-scaling-stroke"/></svg>${labs}<span class="tlab">Tide · ${centreTideSt.name} (m)</span>`;
 }
 async function openTide(s){
   if(tapMarker){ map.removeLayer(tapMarker); tapMarker=null; }
@@ -998,7 +1003,7 @@ function openMarine(){
    decaying after the wind eases; breaking height via Komar–Gaughan; tide + profile
    decide break position/type. Uncalibrated – treat as a guide only. */
 // kind: "beach" (default) or "point"; wrap = how many degrees of swell a point bends around itself
-const SPOTS = [{"id":"goose","name":"Goose Spit (outside)","lat":49.664,"lon":-124.902,"normal":159,"fetch":[2,2,2,2,2,34,24,22,26,32,38,50,152,20,13,10,20,11,6,5,4,4,3,4,4,5,5,6,6,5,3,3,2,2,2,2],"prof":[[0.05,2.4],[0.15,1.2],[0.275,-1.2],[0.425,-2.5],[0.625,-3.7],[0.875,-22.6],[1.25,-41.9],[2,-42.3]]},{"id":"gooseIn","name":"Goose Spit (inside)","lat":49.6633,"lon":-124.906,"normal":0,"surf":false,"enclosed":true,"fetch":[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],"prof":[[0.025,2.1],[0.075,1],[0.15,-2.1],[0.25,-2.1],[0.375,-0.7],[0.525,2.6]]},{"id":"holmes","name":"Point Holmes","lat":49.692,"lon":-124.868,"normal":110,"fetch":[2,28,32,31,23,31,20,19,20,26,32,46,42,78,21,39,13,14,16,11,9,8,2,2,2,2,2,2,2,2,2,2,2,2,2,2],"prof":[[0.275,0],[0.425,-0.6],[0.625,-7.9],[0.875,-9.3],[1.25,-10.8],[2,-10.7]]},{"id":"kye","name":"Kye Bay","lat":49.707,"lon":-124.871,"normal":70,"fetch":[51,35,30,29,24,30,29,20,18,23,30,42,43,82,25,25,15,16,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,43,52,39],"prof":[[0.15,3.7],[0.275,3.7],[0.425,4.5],[0.625,1.8],[0.875,-4.3],[1.25,-4.3],[2,-16.1]]},{"id":"kin","name":"Kin Beach","lat":49.728,"lon":-124.897,"normal":45,"fetch":[28,35,30,29,29,22,30,21,21,21,29,39,48,86,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,5,35,38,49,35],"prof":[[0.15,4.3],[0.275,1.5],[0.425,-2.1],[0.625,-5.2],[0.875,-5.9],[1.25,-6.9],[2,-58.7]]},{"id":"denny","name":"Little River (Denny Rd)","lat":49.738,"lon":-124.906,"normal":40,"kind":"point","wrap":50,"fetch":[26,35,30,28,28,24,30,30,22,21,29,37,54,87,29,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,7,36,36,48,32],"prof":[[0.05,-1.8],[0.15,-7.3],[0.275,-15.6],[0.425,-31.1],[0.625,-28.7],[0.875,-47.5],[1.25,-51.2],[2,-55.6]]},{"id":"bates","name":"Bates Beach","lat":49.775,"lon":-124.975,"normal":49,"fetch":[30,22,32,29,28,28,30,24,34,26,26,40,60,96,4,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,6,30,46,32],"prof":[[0.15,-1.1],[0.275,-6.1],[0.425,-8.8],[0.625,-11],[0.875,-19.2],[1.25,-42.1],[2,-58.4]]},{"id":"kitty","name":"Kitty Coleman","lat":49.789,"lon":-124.996,"normal":52,"fetch":[27,23,42,29,22,28,30,26,35,27,27,41,62,99,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,28,42,44],"prof":[[0.15,-0.5],[0.275,-4.6],[0.425,-5.3],[0.625,-8.4],[0.875,-31.1],[1.25,-32.9],[2,-71.3]]},{"id":"williams","name":"Williams Beach","lat":49.835,"lon":-125.059,"normal":42,"fetch":[26,28,28,19,28,28,28,31,35,39,32,34,75,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,7,40,21,35],"prof":[[0.275,-1.5],[0.425,-4],[0.625,-9.8],[0.875,-8.8],[1.25,-65.6],[2,-87.5]]}];
+const SPOTS = [{"id":"goose","name":"Goose Spit (outside)","lat":49.664,"lon":-124.902,"normal":159,"fetch":[2,2,2,2,2,34,24,22,26,32,38,50,152,20,13,10,20,11,6,5,4,4,3,4,4,5,5,6,6,5,3,3,2,2,2,2],"prof":[[0.05,2.4],[0.15,1.2],[0.275,-1.2],[0.425,-2.5],[0.625,-3.7],[0.875,-22.6],[1.25,-41.9],[2,-42.3]]},{"id":"gooseIn","name":"Goose Spit (inside)","lat":49.6633,"lon":-124.906,"normal":0,"surf":false,"enclosed":true,"fetch":[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],"prof":[[0.025,2.1],[0.075,1],[0.15,-2.1],[0.25,-2.1],[0.375,-0.7],[0.525,2.6]]},{"id":"holmes","name":"Point Holmes","lat":49.692,"lon":-124.868,"normal":110,"fetch":[2,28,32,31,23,31,20,19,20,26,32,46,42,78,21,39,13,14,16,11,9,8,2,2,2,2,2,2,2,2,2,2,2,2,2,2],"prof":[[0.275,0],[0.425,-0.6],[0.625,-7.9],[0.875,-9.3],[1.25,-10.8],[2,-10.7]]},{"id":"kye","name":"Kye Bay","lat":49.707,"lon":-124.871,"normal":70,"fetch":[51,35,30,29,24,30,29,20,18,23,30,42,43,82,25,25,15,16,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,43,52,39],"prof":[[0.15,3.7],[0.275,3.7],[0.425,4.5],[0.625,1.8],[0.875,-4.3],[1.25,-4.3],[2,-16.1]]},{"id":"kin","name":"Kin Beach","lat":49.728,"lon":-124.897,"normal":45,"fetch":[28,35,30,29,29,22,30,21,21,21,29,39,48,86,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,5,35,38,49,35],"prof":[[0.15,4.3],[0.275,1.5],[0.425,-2.1],[0.625,-5.2],[0.875,-5.9],[1.25,-6.9],[2,-58.7]]},{"id":"denny","name":"Little River","lat":49.738,"lon":-124.906,"normal":40,"kind":"point","wrap":50,"fetch":[26,35,30,28,28,24,30,30,22,21,29,37,54,87,29,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,7,36,36,48,32],"prof":[[0.05,-1.8],[0.15,-7.3],[0.275,-15.6],[0.425,-31.1],[0.625,-28.7],[0.875,-47.5],[1.25,-51.2],[2,-55.6]]},{"id":"bates","name":"Bates Beach","lat":49.775,"lon":-124.975,"normal":49,"fetch":[30,22,32,29,28,28,30,24,34,26,26,40,60,96,4,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,6,30,46,32],"prof":[[0.15,-1.1],[0.275,-6.1],[0.425,-8.8],[0.625,-11],[0.875,-19.2],[1.25,-42.1],[2,-58.4]]},{"id":"kitty","name":"Kitty Coleman","lat":49.789,"lon":-124.996,"normal":52,"fetch":[27,23,42,29,22,28,30,26,35,27,27,41,62,99,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,28,42,44],"prof":[[0.15,-0.5],[0.275,-4.6],[0.425,-5.3],[0.625,-8.4],[0.875,-31.1],[1.25,-32.9],[2,-71.3]]},{"id":"williams","name":"Williams Beach","lat":49.835,"lon":-125.059,"normal":42,"fetch":[26,28,28,19,28,28,28,31,35,39,32,34,75,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,7,40,21,35],"prof":[[0.275,-1.5],[0.425,-4],[0.625,-9.8],[0.875,-8.8],[1.25,-65.6],[2,-87.5]]}];
 const G = 9.81, D2R = Math.PI/180;
 const angDiff = (a,b) => { const d = ((a-b)%360+540)%360-180; return d; };
 function movePt(lat, lon, brg, km){ return [lat+Math.cos(brg*D2R)*km/111.32, lon+Math.sin(brg*D2R)*km/(111.32*Math.cos(lat*D2R))]; }
@@ -1556,7 +1561,7 @@ function rebaseNow(){
 }
 function stampUpdated(){ const el = $("#updT"); if(el) el.textContent = "Updated " + fmtTime(new Date(),{hour:"numeric",minute:"2-digit"}); }
 stampUpdated();
-setInterval(()=>{ if(!document.hidden) rebaseNow(); }, 60e3);
+setInterval(()=>{ if(!document.hidden && !rebaseNow()) drawTideRow(); }, 60e3);
 document.addEventListener("visibilitychange", ()=>{ if(document.hidden) return; if(!rebaseNow() && obsData && Date.now()-obsData.at > 10*60e3) loadObs(); });
 window.addEventListener("pageshow", ()=>rebaseNow());
 if("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("sw.js").catch(()=>{});
