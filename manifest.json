@@ -1,6 +1,6 @@
 {
-  "name": "BC Sail – wind, currents & tides",
-  "short_name": "BC Sail",
+  "name": "BC Coastal Conditions",
+  "short_name": "BC Coast",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

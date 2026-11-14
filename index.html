@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0a0f14">
-<title>BC Sail</title>
+<title>BC Coastal Conditions</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -177,7 +177,7 @@
   <label><input type="checkbox" id="tCur" checked>Tidal current stations</label>
   <label><input type="checkbox" id="tSea">Seamarks (OpenSeaMap)</label>
   <label style="justify-content:space-between">Wing / kite level <select id="selLevel" style="background:#1d262e;color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font:600 13px system-ui"><option value="exp">Experienced</option><option value="learn">Learning</option></select></label>
-  <div class="st"><span class="dot" id="sMap2"></span><span id="sMapT">Forecast grid</span><span class="dot" id="sObs2"></span><span id="sObsT">Observations</span><span class="dot" id="sCur2"></span><span id="sCurT">Tide &amp; current stations</span></div>
+  <div class="st"><span class="dot" id="sMap2"></span><span id="sMapT">Forecast grid</span><span class="dot" id="sObs2"></span><span id="sObsT">Observations</span><span class="dot" id="sCur2"></span><span id="sCurT">Tide &amp; current stations</span><span></span><span id="updT"></span></div>
 </div>
 
 <div class="fab">
@@ -201,7 +201,7 @@
 
 <div id="install" hidden>
   <img src="icon-192.png" alt="">
-  <div class="itxt"><b>Install BC Sail</b><span id="installMsg">Full-screen app on your home screen, works with patchy signal.</span></div>
+  <div class="itxt"><b>Install BC Coast</b><span id="installMsg">Full-screen app on your home screen, works with patchy signal.</span></div>
   <button id="btnInstall">Install</button>
   <button id="btnInstallX" class="ix" aria-label="Not now">✕</button>
 </div>
@@ -212,7 +212,7 @@
 <script>
 "use strict";
 /* ============ config ============ */
-const TZ = "America/Vancouver";
+const TZ = (()=>{ try{ return Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Vancouver"; }catch(e){ return "America/Vancouver"; } })();   // device time zone, Vancouver if unknown
 const GEOMET = "https://geo.weather.gc.ca/geomet";
 const IWLS = "https://api-iwls.dfo-mpo.gc.ca/api/v1";
 const OGC = "https://api.weather.gc.ca/collections";
@@ -668,7 +668,7 @@ function updateSummary(){
     $("#sumMain").innerHTML = r ? `${sp.name.replace(/ \(.*\)/,"")} · <span style="color:${starColor(r.stars)}">${ftRange(r.ft)}</span> <span style="color:${starColor(r.stars)};font-size:12px">${starStr(r.stars)}</span>` : (surfLoading ? "Running surf model…" : "Surf model loading…");
     $("#sumSub").textContent = r ? `${fmtTime(d,{weekday:"short",hour:"numeric"})}${tIdx===0?" (now)":" · +"+tIdx+" h"} · ${r.T>0.5?r.T.toFixed(0)+" s · ":""}wind ${Math.round(r.kt)} kn ${compass(r.wdir)} ${r.state}` : "Experimental · tap a spot for details";
     $("#sumSea").hidden = true;
-    const te = $("#sumTide"); te.innerHTML = r ? `<span class="tw">≈</span> ${r.ft>=0.8 ? (r.shape==="closeout"||r.shape==="mostly closing" ? r.shape : `${r.hand.toLowerCase()} ${r.shape==="point"?"off the point":r.shape}`)+" · " : ""}tide ${r.eta.toFixed(1)} m` : "";
+    const te = $("#sumTide"); te.innerHTML = r ? `<span class="tw">≈</span> ${r.ft>=0.8 ? (r.shape==="closeout"||r.shape==="mostly closing" ? r.shape : `${r.hand.toLowerCase()} ${r.shape==="point"?"off the point":r.shape}`)+" · "+r.surface+" · " : ""}tide ${r.eta.toFixed(1)} m` : "";
     return;
   }
   $("#sumMain").innerHTML = f ? `<span style="color:${windColor(f.w)}">${Math.round(f.w)} kn</span> ${compass(f.d)} · gusts <span style="color:${windColor(f.g)}">${Math.round(f.g)}</span>` : "Wind forecast loading…";
@@ -1083,18 +1083,25 @@ function surfSeries(sp, wind, tide){
     size *= shapeMult;
     // period: short-period wind chop is weak and messy; 7 s+ is a proper wave for the Strait
     const periodMult = seaT <= 4 ? 0.3 : seaT >= 7 ? 1 : seaT < 5 ? 0.3 + (seaT-4)*0.3 : seaT < 6 ? 0.6 + (seaT-5)*0.25 : 0.85 + (seaT-6)*0.15;
-    // surface texture from the wind blowing at the spot right now
+    // surface: wind now, plus chop left over from the last couple of hours, plus how steep the sea is
+    const ktEff = Math.max(kt, 0.7*(wind.u[i-1]??0)*MS2KT, 0.4*(wind.u[i-2]??0)*MS2KT);
+    const band = k => k<5 ? 1 : k<8 ? 0.9 : k<12 ? 0.72 : k<16 ? 0.52 : k<20 ? 0.4 : k<25 ? 0.3 : 0.2;
     let textureMult;
-    if(state==="glassy") textureMult = 1;
-    else if(state==="offshore") textureMult = kt<12 ? 1.05 : kt<20 ? 0.85 : 0.6;
-    else { textureMult = kt<5 ? 1 : kt<8 ? 0.9 : kt<12 ? 0.75 : kt<16 ? 0.55 : kt<20 ? 0.45 : 0.35; if(state==="cross-shore") textureMult = Math.min(1, textureMult+0.05); }
+    if(state==="offshore") textureMult = kt<12 ? 1.05 : kt<20 ? 0.85 : 0.6;
+    else if(state==="glassy") textureMult = Math.min(1, band(ktEff)+0.25);            // wind just dropped: leftover bump
+    else { textureMult = band(ktEff); if(state==="cross-shore") textureMult = Math.min(1, textureMult+0.05); }
     if((shape==="closeout"||shape==="mostly closing") && state==="onshore" && kt>12) textureMult *= 0.85;   // wind closes it out faster
+    const steep = seaT>0 ? seaH/(1.56*seaT*seaT) : 0;                                   // storm sea is steep and short-crested; leftover swell is not
+    const steepF = steep > 0.03 ? 0.75 : steep > 0.02 ? 0.88 : 1;
+    const clean = Math.min(1.05, textureMult*steepF);
+    const surface = clean >= 0.9 ? "clean" : clean >= 0.68 ? "light bump" : clean >= 0.45 ? "choppy" : "messy";
     let q = 0;
     if(bi.type==="plunging") q += 0.2; else if(bi.type==="shorebreak") q -= 0.6;
     if(bi.width > 250) q -= 0.3;
-    const cap = kt > 30 ? 2.5 : kt > 25 ? 3.25 : kt > 20 ? 4.25 : 5;   // strong wind = blown out, however big
-    const stars = size<=0 ? 0 : Math.max(0, Math.min(cap, size*periodMult*textureMult + q));
-    out.push({t, Hb, ft:Hb*3.281, T:seaT, dir:seaD, kt, wdir:D, state, eta, stars, ...bi, shape, thB, th0, hand, peelTo});
+    if(clean >= 0.9 && ft >= 1.5) q += 0.4;                                             // smooth leftover swell is the prize
+    const cap = kt > 30 ? 2 : kt > 25 ? 2.75 : kt > 20 ? 3.5 : surface==="messy" ? 2.5 : 5;   // blown out / messy never rates high, however big
+    const stars = size<=0 ? 0 : Math.max(0, Math.min(cap, size*periodMult*clean + q));
+    out.push({t, Hb, ft:Hb*3.281, T:seaT, dir:seaD, kt, wdir:D, state, eta, stars, ...bi, shape, thB, th0, hand, peelTo, clean, surface});
   }
   return out;
 }
@@ -1151,12 +1158,19 @@ function windSportSeries(sp, wind, tide, surf, key){
     const dpF = walk===null ? 0 : walk<=0.15 ? 1 : walk<=0.35 ? 0.75 : 0.4;
     if(walk===null) why.push("too shallow"); else if(walk>0.15) why.push(`walk ~${Math.round(walk*1000/50)*50} m`);
     const day = sunAlt(t, sp.lat, sp.lon) > -2;   // ~15 min after sunset
-    let stars = sp0*gF*dF*dpF;
+    // messy vs smooth: is the wind holding steady hour to hour, and how rough is the water
+    const nb = [i-1, i+1].filter(k=>k>=0 && k<wind.u.length);
+    const dV = Math.max(0, ...nb.map(k=>Math.abs(wind.u[k]-wind.u[i])*MS2KT)), dD = kt<6 ? 0 : Math.max(0, ...nb.map(k=>Math.abs(angDiff(wind.d[k], D))));
+    const sF = (dV<=4 && dD<=20) ? 1 : (dV<=8 && dD<=40) ? 0.85 : 0.65; if(sF<1 && kt>=S.min) why.push(sF<0.8 ? "shifty wind" : "wind changing");
+    const sf = surf?.[out.length]; let wF = 1;
+    if(sf && sf.ft>=3 && sf.state!=="offshore"){ wF = sf.ft>=4.5 ? (level==="learn"?0.5:0.7) : (level==="learn"?0.7:0.85); why.push("rough water"); }
+    const smooth = Math.min(gF, sF, wF) >= 1 ? "smooth" : Math.min(gF, sF, wF) >= 0.8 ? "a bit bumpy" : "messy";
+    let stars = sp0*gF*dF*dpF*sF*wF;
     if(stars>0 && kt>=S.lo && kt<=S.hi && spread<=6 && dF>=0.95 && dpF===1) stars += 1;
     if(stars>0 && sp.enclosed && level==="exp" && kt>=20 && dpF>=0.75){ stars += 0.75; why.push("big-wind flat water"); }
     if(!day){ stars = 0; why.unshift("dark"); }
     const water = sp.surf===false ? "flat water" : surf?.[out.length] ? (surf[out.length].ft<0.8 ? "small chop" : `waves ${ftRange(surf[out.length].ft)}`) : "";
-    out.push({t, kt, gk, D, eta, stars:Math.max(0,Math.min(5,stars)), dirLab, unsafe, walk, why, day, water, spread});
+    out.push({t, kt, gk, D, eta, stars:Math.max(0,Math.min(5,stars)), dirLab, unsafe, walk, why, day, water, spread, smooth});
   }
   return out;
 }
@@ -1181,13 +1195,13 @@ function openWindSport(sp){
   const fmtWin = w => `<div><span><b>${fmtTime(new Date(S[w.a].t),{weekday:"short",hour:"numeric"})}</b> – ${fmtTime(new Date(S[w.b].t+3600e3),{hour:"numeric"})}</span><span style="color:${starColor(w.best.stars)}">${kn(w.best.kt)}–${kn(w.best.gk)} kn ${starStr(w.best.stars)}</span></div>`;
   sh.innerHTML = sheetHead(sp.name, `Experimental ${meta.name.toLowerCase()} score · beach faces ${compass(sp.normal)}`) +
     (now.unsafe ? `<div class="mwarn" style="background:rgba(130,20,20,.6);border-color:#ef5350">⚠ Offshore wind at this time – you'd be blown away from the beach</div>` : "") +
-    `<div class="kv"><div><span>At ${fmtTime(curTime(),{weekday:"short",hour:"numeric"})}</span><b style="color:${starColor(now.stars)}">${starStr(now.stars)}</b><span>${now.why.length? now.why.join(" · ") : "good conditions"}</span></div>
+    `<div class="kv"><div><span>At ${fmtTime(curTime(),{weekday:"short",hour:"numeric"})}</span><b style="color:${starColor(now.stars)}">${starStr(now.stars)}</b><span>${now.kt>=meta.min && now.day ? now.smooth+(now.why.length?" · ":"") : ""}${now.why.length? now.why.join(" · ") : (now.kt>=meta.min?"":"good conditions")}</span></div>
       <div><span>Wind</span><b>${kn(now.kt)}–${kn(now.gk)} kn</b><span>${compass(now.D)} · ${now.dirLab}</span></div>
       <div><span>Tide (${d.tideName||"nearest"})</span><b>${now.eta.toFixed(1)} m</b><span>${now.walk===null ? "not enough water near shore" : now.walk<=0.15 ? "water at the beach" : "walk out ~"+Math.round(now.walk*1000/50)*50+" m"}</span></div>
       <div><span>Water</span><b style="font-size:16px">${now.water||"–"}</b><span>${meta.name} (${level==="exp"?"experienced":"learning"}): best ${meta.lo}–${meta.hi} kn</span></div></div>
      <div class="sec-t">Next 48 h</div><div class="strip"><table>${hdr}</tr>${rW}</tr>${rG}</tr>${rD}</tr>${rS}</tr>${rX}</tr></table></div>
      <div class="sec-t">Best windows (≥ 3★, daylight)</div><div class="ev">${wins.length? wins.slice(0,6).map(fmtWin).join("") : "<div class='s'>No good windows in the next 48 h</div>"}</div>
-     <div class="muted" style="padding-top:10px;line-height:1.5"><b>Experimental.</b> Scores forecast wind strength (${level==="exp"?"experienced":"learning"}: usable ${meta.min}–${meta.max} kn, best ${meta.lo}–${meta.hi}), gust spread (≤5 kn is normal), direction to the beach (offshore = 0), water depth at your launch for the tide (CHS NONNA seabed + CHS tide) and daylight. ${sp.enclosed?"Inside the spit, wind blows across the spit into the enclosed harbour: flat water and a solid breeze, a favourite on big-wind days, but gustier off the land.":""} Change rider level in the ≡ menu. Always check conditions yourself.</div>`;
+     <div class="muted" style="padding-top:10px;line-height:1.5"><b>Experimental.</b> Scores forecast wind strength (${level==="exp"?"experienced":"learning"}: usable ${meta.min}–${meta.max} kn, best ${meta.lo}–${meta.hi}), gust spread (≤5 kn is normal), how steady the wind holds hour to hour, rough water, direction to the beach (offshore = 0), water depth at your launch for the tide (CHS NONNA seabed + CHS tide) and daylight. ${sp.enclosed?"Inside the spit, wind blows across the spit into the enclosed harbour: flat water and a solid breeze, a favourite on big-wind days, but gustier off the land.":""} Change rider level in the ≡ menu. Always check conditions yourself.</div>`;
   sh.classList.add("open"); sh.scrollTop=0;
   const st = sh.querySelector(".strip"), nc = st?.querySelector("td.now"); if(nc) st.scrollLeft = Math.max(0, nc.offsetLeft-80);
 }
@@ -1246,7 +1260,7 @@ function openSurf(sp){
   const S = d.series; const sh = $("#sheet");
   // best windows: consecutive hours ≥ 2.5 stars
   const wins=[]; let cur=null; S.forEach((r,i)=>{ if(r.stars>=2.5){ if(!cur) cur={a:i,b:i,best:r}; else { cur.b=i; if(r.stars>cur.best.stars) cur.best=r; } } else if(cur){ wins.push(cur); cur=null; } }); if(cur) wins.push(cur);
-  let hdr="<tr><th class='rowlab'>Local</th>", rS="<tr><td class='rowlab'>Surf</td>", rR="<tr><td class='rowlab'>Rating</td>", rT="<tr><td class='rowlab'>Period</td>", rW="<tr><td class='rowlab'>Wind</td>", rX="<tr><td class='rowlab'>Tide m</td>", rP="<tr><td class='rowlab'>Shape</td>";
+  let hdr="<tr><th class='rowlab'>Local</th>", rS="<tr><td class='rowlab'>Surf</td>", rR="<tr><td class='rowlab'>Rating</td>", rT="<tr><td class='rowlab'>Period</td>", rW="<tr><td class='rowlab'>Wind</td>", rX="<tr><td class='rowlab'>Tide m</td>", rP="<tr><td class='rowlab'>Shape</td>", rC="<tr><td class='rowlab'>Surface</td>";
   S.forEach((r,i)=>{ const dt=new Date(r.t), cls=(localHour(dt)===0?"d ":"")+(i===tIdx?"now":"");
     hdr += `<th class="${localHour(dt)===0?'d':''}">${localHour(dt)===0? fmtDay(dt).split(" ")[0] : fmtTime(dt,{hour:"numeric"}).replace(/\s?[ap]\.?m\.?/i,m=>m.trim()[0].toLowerCase())}</th>`;
     rS += `<td class="${cls}" style="background:${starColor(r.stars)};color:#fff;font-weight:700">${r.ft<0.8?"–":r.ft.toFixed(1)}</td>`;
@@ -1255,20 +1269,21 @@ function openSurf(sp){
     rW += `<td class="${cls}" title="${r.state}">${arrowSVG((r.wdir+180)%360, r.state==="offshore"?"#9ccc65":r.state==="onshore"?"#ef9a9a":"#cfe3f3",14)}<br>${Math.round(r.kt)}</td>`;
     rX += `<td class="${cls}" style="color:#7fb6d3">${r.eta.toFixed(1)}</td>`;
     const sym = r.ft<0.8 ? "" : r.shape==="closeout" ? "▬" : r.shape==="mostly closing" ? "▭" : r.shape==="point" ? "◣" : (r.hand==="Rights" ? "↗" : "↖");
-    rP += `<td class="${cls}" title="${r.shape}" style="color:${r.shape==="closeout"?"#ef9a9a":r.shape==="mostly closing"?"#ffcc80":"#c5e1a5"}">${sym}</td>`; });
+    rP += `<td class="${cls}" title="${r.shape}" style="color:${r.shape==="closeout"?"#ef9a9a":r.shape==="mostly closing"?"#ffcc80":"#c5e1a5"}">${sym}</td>`;
+    rC += `<td class="${cls}" title="${r.surface}" style="color:${r.surface==="clean"?"#9ccc65":r.surface==="light bump"?"#dce775":r.surface==="choppy"?"#ffb74d":"#ef9a9a"}">${r.ft<0.8?"":r.surface==="clean"?"━":r.surface==="light bump"?"∼":r.surface==="choppy"?"≈":"≋"}</td>`; });
   const now = S[tIdx];
   const fmtWin = w => `<div><span><b>${fmtTime(new Date(S[w.a].t),{weekday:"short",hour:"numeric"})}</b> – ${fmtTime(new Date(S[w.b].t+3600e3),{hour:"numeric"})}</span><span style="color:${starColor(w.best.stars)}">${ftRange(w.best.ft)} ${starStr(w.best.stars)}</span></div>`;
   const seF = Math.round(radialFetch(sp, 130)), eF = Math.round(radialFetch(sp, 90));
   sh.innerHTML = sheetHead(sp.name, `Experimental surf estimate · faces ${compass(sp.normal)} (${sp.normal}°)`) +
-    `<div class="kv"><div><span>At ${fmtTime(curTime(),{weekday:"short",hour:"numeric"})}</span><b style="color:${starColor(now.stars)}">${ftRange(now.ft)}</b><span>${starStr(now.stars)} · ${now.T>0.5?now.T.toFixed(0)+" s":""} ${now.type}</span></div>
+    `<div class="kv"><div><span>At ${fmtTime(curTime(),{weekday:"short",hour:"numeric"})}</span><b style="color:${starColor(now.stars)}">${ftRange(now.ft)}</b><span>${starStr(now.stars)} · ${now.T>0.5?now.T.toFixed(0)+" s":""} ${now.type}${now.ft>=0.8?" · "+now.surface:""}</span></div>
       <div><span>Wave shape</span><b style="font-size:16px">${now.ft<0.8 ? "–" : now.shape==="point" ? now.hand+" off the point" : now.shape==="closeout"||now.shape==="mostly closing" ? now.shape : now.hand+", "+now.shape}</b><span>${now.ft<0.8 ? "" : `breaks ${Math.round(now.thB)}° to the beach · peels toward ${compass(now.peelTo)}`}</span></div>
       <div><span>Spot type</span><b style="font-size:16px">${sp.kind==="point"?"Point break":"Beach break"}</b><span>${sp.kind==="point"?"swell wraps ~"+sp.wrap+"° around the point":"needs swell at an angle to peel"}</span></div>
       <div><span>Wind at spot</span><b>${Math.round(now.kt)} kn</b><span>${compass(now.wdir)} · ${now.state}</span></div>
       <div><span>Tide (${d.tideName||"nearest"})</span><b>${now.eta.toFixed(1)} m</b><span>surf zone ~${Math.round(now.width)} m wide</span></div>
       <div><span>Exposure</span><b style="font-size:16px">SE ${seF} km · E ${eF} km</b><span>open-water fetch</span></div></div>
-     <div class="sec-t">Next 48 h · surf face height (ft)</div><div class="strip"><table>${hdr}</tr>${rS}</tr>${rR}</tr>${rP}</tr>${rT}</tr>${rW}</tr>${rX}</tr></table></div>
+     <div class="sec-t">Next 48 h · surf face height (ft)</div><div class="strip"><table>${hdr}</tr>${rS}</tr>${rR}</tr>${rP}</tr>${rC}</tr>${rT}</tr>${rW}</tr>${rX}</tr></table></div>
      <div class="sec-t">Best windows (≥ 3★)</div><div class="ev">${wins.length? wins.slice(0,6).map(fmtWin).join("") : "<div class='s'>Nothing rideable forecast in the next 48 h</div>"}</div>
-     <div class="muted" style="padding-top:10px;line-height:1.5"><b>Experimental, not calibrated.</b> Built from forecast wind (ECCC HRDPS), the spot's open-water fetch, how long the wind has blown, the CHS tide, and CHS NONNA seabed depths. Wave shape: ▬ closeout, ▭ mostly closing, ↗/↖ peeling right/left, ◣ point. It doesn't know about sandbars, kelp, rocks or local quirks – please compare with what you actually see so it can be tuned.</div>`;
+     <div class="muted" style="padding-top:10px;line-height:1.5"><b>Experimental, not calibrated.</b> Built from forecast wind (ECCC HRDPS), the spot's open-water fetch, how long the wind has blown, the CHS tide, and CHS NONNA seabed depths. Surface: ━ clean, ∼ light bump, ≈ choppy, ≋ messy (wind now and over the last 2 h, and how steep the sea is). Wave shape: ▬ closeout, ▭ mostly closing, ↗/↖ peeling right/left, ◣ point. It doesn't know about sandbars, kelp, rocks or local quirks – please compare with what you actually see so it can be tuned.</div>`;
   sh.classList.add("open"); sh.scrollTop=0;
   const st = sh.querySelector(".strip"), nc = st?.querySelector("td.now"); if(nc) st.scrollLeft = Math.max(0, nc.offsetLeft-80);
 }
@@ -1513,7 +1528,7 @@ $("#btnPlay").onclick = async ()=>{
 };
 $("#btnHome").onclick = ()=> map.setView(HOME.c, HOME.z);
 $("#btnNow").onclick = ()=> setTime(0, true);
-$("#btnRefresh").onclick = ()=>{ gridCache.clear(); for(const k in curCache) delete curCache[k]; for(const k in tideCache) delete tideCache[k]; surfData=null; if(activeKey==="surf") setTimeout(()=>loadSurf(true), 1500); centreTide=null; centreTideSt=null; centreFc=null; centreFcRaw=null; centreCorr=null; lastCentre=null; loadObs(); loadCurStations(); refreshModel(); loadCentreForecast(); };
+$("#btnRefresh").onclick = ()=>{ stampUpdated(); gridCache.clear(); for(const k in curCache) delete curCache[k]; for(const k in tideCache) delete tideCache[k]; surfData=null; if(activeKey==="surf") setTimeout(()=>loadSurf(true), 1500); centreTide=null; centreTideSt=null; centreFc=null; centreFcRaw=null; centreCorr=null; lastCentre=null; loadObs(); loadCurStations(); refreshModel(); loadCentreForecast(); };
 $("#btnLoc").onclick = ()=>{ if(!navigator.geolocation) return; navigator.geolocation.getCurrentPosition(p=>{ map.setView([p.coords.latitude,p.coords.longitude], Math.max(map.getZoom(),10)); L.circleMarker([p.coords.latitude,p.coords.longitude],{radius:7,color:"#fff",fillColor:"#2196f3",fillOpacity:1,weight:3,pane:"marks"}).addTo(map); }, ()=>{ $("#note").textContent="Location unavailable."; }, {enableHighAccuracy:true,timeout:10000}); };
 map.on("click", e=>{ if($("#sheet").classList.contains("open")) { closeSheet(); return; }
   if(activeKey==="current") openCurrentSpot(e.latlng.lat, e.latlng.lng); else openSpot(e.latlng.lat, e.latlng.lng); });
@@ -1530,7 +1545,20 @@ setLayer(ls.get("layer") || "wind");
 loadCentreForecast(); loadObs(); loadCurStations(); loadMarine();
 setInterval(loadMarine, 30*60e3);
 setInterval(loadObs, 10*60e3);
-document.addEventListener("visibilitychange", ()=>{ if(!document.hidden && obsData && Date.now()-obsData.at > 10*60e3) loadObs(); });
+function rebaseNow(){
+  const d = new Date(); d.setUTCMinutes(0,0,0); if(+d === +t0) return false;
+  const shift = Math.round((+d - +t0)/3600e3);
+  t0.setTime(+d);
+  tIdx = Math.max(0, Math.min(HOURS, tIdx - shift)); $("#slider").value = tIdx;   // keep looking at the same clock time if it's still ahead
+  $("#btnRefresh").onclick();
+  drawBars(); updateSummary(); drawTideRow();
+  return true;
+}
+function stampUpdated(){ const el = $("#updT"); if(el) el.textContent = "Updated " + fmtTime(new Date(),{hour:"numeric",minute:"2-digit"}); }
+stampUpdated();
+setInterval(()=>{ if(!document.hidden) rebaseNow(); }, 60e3);
+document.addEventListener("visibilitychange", ()=>{ if(document.hidden) return; if(!rebaseNow() && obsData && Date.now()-obsData.at > 10*60e3) loadObs(); });
+window.addEventListener("pageshow", ()=>rebaseNow());
 if("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("sw.js").catch(()=>{});
 
 /* ============ install prompt (website only, never inside the installed app) ============ */
